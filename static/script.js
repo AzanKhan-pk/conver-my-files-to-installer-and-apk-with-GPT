@@ -54,6 +54,16 @@ function renderImageResult(images) {
 
   const thumbnails = images.map((image) => `
     <figure class="image-gallery-item">
+      <label class="image-select-label">
+        <input
+          class="image-select-checkbox"
+          type="checkbox"
+          data-image-id="${Number(image.id)}"
+          checked
+          aria-label="Select image ${Number(image.id)}"
+        >
+        <span>Select</span>
+      </label>
       <img
         src="${escapeHtml(image.url)}"
         alt="Album image ${Number(image.id)}"
@@ -72,14 +82,112 @@ function renderImageResult(images) {
         </div>
         <span class="image-gallery-count">${images.length}</span>
       </div>
+      <div class="image-gallery-selection">
+        <label>
+          <input id="selectAllImages" type="checkbox" checked>
+          Select all
+        </label>
+        <span id="selectedImageCount">${images.length} selected</span>
+      </div>
       <div class="image-gallery-grid">${thumbnails}</div>
-      <p class="image-gallery-note">
-        Preview only. Album downloading will be enabled after the download endpoint is added.
-      </p>
+      <button id="downloadSelectedImagesBtn" type="button">
+        Download selected images (ZIP) ↗
+      </button>
     </div>
   `;
 
   resultBox.hidden = false;
+
+  const selectedImageIds = new Set(images.map((image) => Number(image.id)));
+  const checkboxes = Array.from(
+    resultBox.querySelectorAll(".image-select-checkbox")
+  );
+  const selectAll = $("#selectAllImages");
+  const downloadButton = $("#downloadSelectedImagesBtn");
+
+  const updateSelection = () => {
+    const selectedCount = checkboxes.filter((checkbox) => checkbox.checked).length;
+    selectedImageIds.clear();
+    checkboxes.forEach((checkbox) => {
+      if (checkbox.checked) selectedImageIds.add(Number(checkbox.dataset.imageId));
+    });
+    selectAll.checked = selectedCount === checkboxes.length;
+    selectAll.indeterminate = selectedCount > 0 && selectedCount < checkboxes.length;
+    $("#selectedImageCount").textContent = `${selectedCount} selected`;
+    downloadButton.disabled = selectedCount === 0;
+    downloadButton.textContent = selectedCount
+      ? `Download selected images (${selectedCount}) ZIP ↗`
+      : "Select images to download";
+  };
+
+  checkboxes.forEach((checkbox) => {
+    checkbox.addEventListener("change", updateSelection);
+  });
+
+  selectAll.addEventListener("change", () => {
+    checkboxes.forEach((checkbox) => {
+      checkbox.checked = selectAll.checked;
+    });
+    updateSelection();
+  });
+
+  downloadButton.addEventListener("click", downloadSelectedImages);
+  updateSelection();
+}
+
+async function downloadSelectedImages() {
+  const selectedIds = Array.from(
+    resultBox.querySelectorAll(".image-select-checkbox:checked")
+  ).map((checkbox) => Number(checkbox.dataset.imageId));
+
+  if (!selectedIds.length) {
+    setStatus("Select at least one image first.", "error");
+    return;
+  }
+
+  const button = $("#downloadSelectedImagesBtn");
+  const originalText = button.textContent;
+  button.disabled = true;
+  button.textContent = "Preparing ZIP...";
+
+  try {
+    const response = await fetch("/api/images/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        url: urlInput.value.trim(),
+        image_ids: selectedIds
+      })
+    });
+
+    if (!response.ok) {
+      let message = "Could not download the selected images.";
+      try {
+        const data = await response.json();
+        message = data.error || message;
+      } catch (_) {}
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    if (!blob.size) throw new Error("The ZIP file is empty.");
+
+    const objectUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = "tiktok-photo-album.zip";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
+
+    setStatus(`${selectedIds.length} images downloaded as a ZIP file.`, "success");
+  } catch (error) {
+    setStatus(error.message || "Image download failed.", "error");
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+  }
 }
 
 function renderVideoResult(video) {
