@@ -1136,6 +1136,7 @@ def api_images_info():
         return jsonify({
             "ok": True,
             "count": len(image_urls),
+            "platform": platform_for(url),
             "images": [
                 {
                     "id": index + 1,
@@ -1161,9 +1162,9 @@ def api_images_download():
         url = clean_url(payload.get("url", ""))
 
         parsed = urlparse(url)
-        host = (parsed.hostname or "").lower()
-        if host.removeprefix("www.") != "tiktok.com" or "/photo/" not in parsed.path:
-            raise ValueError("Only public TikTok photo albums are supported here.")
+        host = (parsed.hostname or "").lower().removeprefix("www.")
+        if not host:
+            raise ValueError("Please provide a valid public post URL.")
 
         raw_ids = payload.get("image_ids")
         if not isinstance(raw_ids, list) or not raw_ids:
@@ -1196,10 +1197,18 @@ def api_images_download():
                 trusted_host = any(
                     image_host == suffix.lstrip(".") or image_host.endswith(suffix)
                     for suffix in (
-                        ".tiktokcdn.com",
-                        ".tiktokv.com",
-                        ".byteoversea.com",
-                        ".ibytedtos.com",
+                        # TikTok
+                        ".tiktokcdn.com", ".tiktokv.com",
+                        ".byteoversea.com", ".ibytedtos.com",
+                        # Instagram / Facebook
+                        ".fbcdn.net", ".fbsbx.com",
+                        ".cdninstagram.com",
+                        # Pinterest
+                        ".pinimg.com",
+                        # X / Twitter
+                        ".twimg.com",
+                        # Reddit
+                        ".redditmedia.com", ".redd.it",
                     )
                 )
                 if not trusted_host:
