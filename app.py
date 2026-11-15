@@ -461,12 +461,26 @@ def humanize_error(error):
             "Please try again shortly; the app stopped waiting to avoid a long delay."
         )
 
+    if (
+        ("permission denied" in lowered or "unable to open database file" in lowered)
+        and ("cookie" in lowered or "cookies" in lowered)
+    ):
+        return (
+            "The browser's cookie database could not be read. "
+            "Close Chrome completely, then restart the app and try again. "
+            "If it still fails, your browser may restrict access to its cookie store. "
+            "Only use your own authorized account session; never share cookie files."
+        )
+
     if any(word in lowered for word in (
         "login", "sign in", "cookies"
     )):
         return (
-            "This media requires authentication. "
-            "Use only authorized access."
+            "This media requires an authorized session. "
+            "To opt in to your own Chrome session, launch the app with "
+            "GALLERY_DL_BROWSER=chrome set. If Chrome's cookie database is locked, "
+            "close Chrome completely and restart the app. "
+            "Use only content your account is allowed to view."
         )
 
     if "drm" in lowered:
@@ -870,6 +884,15 @@ def run_gallery_dl_urls(url):
 
     if not image_urls and source_platform == "Instagram":
         lowered = diagnostic.lower()
+        if (
+            ("permission denied" in lowered or "unable to open database file" in lowered)
+            and ("cookie" in lowered or "cookies" in lowered)
+        ):
+            raise PermissionError(
+                "Chrome's cookie database could not be read. "
+                "Close Chrome completely and restart the app, then try again. "
+                "If access is still denied, use another supported, explicitly authorized session method."
+            )
         if any(term in lowered for term in (
             "redirect to login", "login required", "login_required",
             "authentication required", "requires authentication",
@@ -877,7 +900,9 @@ def run_gallery_dl_urls(url):
         )):
             raise PermissionError(
                 "Instagram requires an authorized session to access this post. "
-                "Only content your account is allowed to view can be processed."
+                "To opt in to your own Chrome session, launch the app with "
+                "GALLERY_DL_BROWSER=chrome set. Only content your account is "
+                "allowed to view can be processed."
             )
         if any(term in lowered for term in (
             "checkpoint", "challenge_required", "challenge page",
