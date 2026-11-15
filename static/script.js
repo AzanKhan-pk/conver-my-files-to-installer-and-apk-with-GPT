@@ -281,8 +281,10 @@ fetchButton.addEventListener("click", async () => {
           || (host.endsWith("tiktok.com") && /\/photo\//i.test(path))
           || (host === "pinterest.com" || host === "pin.it" || host.endsWith(".pinterest.com"))
           || (host === "instagram.com" && /\/(p|tv|reel)\//i.test(path))
-          || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com"))
-              && /\/(photo|photos|posts|permalink)\//i.test(path))
+          || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com")
+                || host === "fb.com" || host === "fb.watch")
+              && (/\/(photo|photos|posts|permalink|share)\//i.test(path)
+                  || /\/(photo|permalink)\.php$/i.test(path)))
           || ((host === "x.com" || host === "twitter.com") && /\/status\//i.test(path))
           || ((host === "reddit.com" || host === "redd.it") && /\/(comments|gallery)\//i.test(path));
       } catch (_) {
@@ -291,6 +293,7 @@ fetchButton.addEventListener("click", async () => {
     })();
 
     let imageData = null;
+    let imageExtractionError = "";
 
     if (isImageCandidate) {
       try {
@@ -304,9 +307,11 @@ fetchButton.addEventListener("click", async () => {
         if (imageResponse.ok && candidate.ok
             && Array.isArray(candidate.images) && candidate.images.length) {
           imageData = candidate;
+        } else {
+          imageExtractionError = candidate.error || "No images were returned for this post.";
         }
-      } catch (_) {
-        // If image extraction is unavailable for this post, try the video extractor.
+      } catch (error) {
+        imageExtractionError = error.message || "Image extraction request failed.";
       }
     }
 
@@ -326,7 +331,11 @@ fetchButton.addEventListener("click", async () => {
       const data = await response.json();
 
       if (!response.ok || !data.ok) {
-        throw new Error(data.error || "Could not read this link.");
+        const videoError = data.error || "Could not read this link.";
+        if (isImageCandidate && imageExtractionError) {
+          throw new Error(`Image extraction: ${imageExtractionError} Video fallback: ${videoError}`);
+        }
+        throw new Error(videoError);
       }
 
       currentVideo = data.video;
