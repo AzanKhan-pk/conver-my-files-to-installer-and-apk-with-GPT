@@ -698,11 +698,11 @@ def facebook_photo_page_urls(url):
         response = facebook_request_session().get(
             url,
             allow_redirects=True,
-            timeout=(5, 8),
+            timeout=(3, 4),
         )
     except requests.Timeout as error:
         app.logger.warning("Facebook post request timed out: %s", error)
-        raise TimeoutError("Facebook post page timed out while reading images.") from error
+        raise TimeoutError("Facebook took too long to respond while checking this post.") from error
     except requests.RequestException as error:
         app.logger.warning("Could not read Facebook post page: %s", error)
         return []
@@ -760,7 +760,7 @@ def run_gallery_dl_urls(url):
             command,
             capture_output=True,
             text=True,
-            timeout=12 if source_platform in {"Facebook", "Instagram"} else 35,
+            timeout=7 if source_platform in {"Facebook", "Instagram"} else 35,
             check=False,
         )
     except subprocess.TimeoutExpired as error:
@@ -812,16 +812,26 @@ def get_gallery_image_urls(url):
     # supported individual-photo extractor for each one.
     if is_facebook:
         photo_pages = facebook_photo_page_urls(url)
-        if photo_pages:
-            image_urls = []
-            image_urls = run_gallery_dl_urls(photo_pages)
-            if image_urls:
-                return image_urls
+        # Facebook share/post URLs are not supported by gallery-dl directly.
+        # If the accessible page does not expose photo IDs, stop here rather
+        # than making a second slow request that cannot succeed.
+        if not photo_pages:
+            return []
+        return run_gallery_dl_urls(photo_pages)
 
     return run_gallery_dl_urls(url)
 
+
 def get_media_info(url):
-    return extract_info_with_retry(url, download=False)
+    # Fetch metadata with a short, bounded network wait. Keep the more
+    # resilient defaults for the actual download operation.
+    options = base_ydl_options()
+    options.update({
+        "retries": 1,
+        "extractor_retries": 1,
+        "socket_timeout": 10,
+    })
+    return extract_info_with_retry(url, download=False, options=options)
 
 
 def format_duration(info):
