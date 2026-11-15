@@ -55,63 +55,149 @@ ALLOWED_HOSTS = {
     "youtube.com", "www.youtube.com", "m.youtube.com",
     "youtu.be", "youtube-nocookie.com",
     "www.youtube-nocookie.com",
+    "ytimg.com", "i.ytimg.com", "img.youtube.com",
+    "googlevideo.com",
 
     # TikTok
     "tiktok.com", "www.tiktok.com",
     "vm.tiktok.com", "vt.tiktok.com",
+    "tiktokcdn.com", "tiktokv.com",
+    "tiktokcdn-us.com", "muscdn.com",
+    "byteoversea.com",
 
     # Instagram
     "instagram.com", "www.instagram.com",
+    "cdninstagram.com", "scontent.cdninstagram.com",
+    "fbcdn.net",
 
     # Facebook
     "facebook.com", "www.facebook.com",
-    "m.facebook.com", "fb.com", "www.fb.com", "fb.watch",
+    "m.facebook.com", "fb.watch",
+    "fbcdn.net", "fbsbx.com",
+    "video.xx.fbcdn.net",
 
     # X / Twitter
     "twitter.com", "www.twitter.com",
     "x.com", "www.x.com",
+    "twimg.com", "pbs.twimg.com",
+    "video.twimg.com",
 
     # Reddit
     "reddit.com", "www.reddit.com",
     "old.reddit.com", "new.reddit.com",
     "v.redd.it", "redd.it",
+    "redditmedia.com", "redditstatic.com",
+    "preview.redd.it",
 
     # Vimeo
     "vimeo.com", "www.vimeo.com",
     "player.vimeo.com",
+    "i.vimeocdn.com", "vod-progressive.akamaized.net",
 
     # Dailymotion
     "dailymotion.com", "www.dailymotion.com",
-    "dai.ly",
+    "dai.ly", "dmcdn.net",
+    "s1.dmcdn.net",
 
     # Twitch
     "twitch.tv", "www.twitch.tv",
     "m.twitch.tv", "clips.twitch.tv",
+    "ttvnw.net", "jtvnw.net",
+    "twitchcdn.net",
 
     # SoundCloud
     "soundcloud.com", "www.soundcloud.com",
-    "snd.sc",
+    "snd.sc", "sndcdn.com",
 
     # Bilibili
     "bilibili.com", "www.bilibili.com",
-    "b23.tv",
+    "b23.tv", "hdslb.com",
+    "bilivideo.com",
 
     # Pinterest
     "pinterest.com", "www.pinterest.com",
     "pin.it", "www.pin.it",
     "i.pinimg.com", "images.pinimg.com",
+    "v.pinimg.com",
 
     # Darkero
-    "darkero.co",
-    "www.darkero.co",
-    "darkero.com",
-    "www.darkero.com",
+    "darkero.co", "www.darkero.co",
+    "darkero.com", "www.darkero.com",
     "files.darkero.com",
 
     # Baddielatina
     "baddielatina.com",
     "www.baddielatina.com",
     "files.baddielatina.com",
+
+    # Pornhub
+    "pornhub.com", "www.pornhub.com",
+    "m.pornhub.com",
+    "pornhub.org",
+    "pornhubpremium.com",
+    "phncdn.com",
+    "www.phncdn.com",
+    "ci.phncdn.com",
+    "ei.phncdn.com",
+    "di.phncdn.com",
+    "thumbs.phncdn.com",
+
+    # XNXX
+    "xnxx.com", "www.xnxx.com",
+    "m.xnxx.com",
+    "xnxx.tv",
+    "xnxx.health",
+    "xnxx-cdn.com",
+
+    # Xvideos
+    "xvideos.com", "www.xvideos.com",
+    "xvideos.red",
+    "xvideos-cdn.com",
+
+    # Xhamster
+    "xhamster.com", "www.xhamster.com",
+    "xhamster.desi",
+    "xhcdn.com",
+
+    # XVideos-style media hosting
+    "xv-cdn.com",
+
+    # Stripchat
+    "stripchat.com", "www.stripchat.com",
+    "static.stripchat.com",
+
+    # RedTube
+    "redtube.com", "www.redtube.com",
+
+    # YouPorn
+    "youporn.com", "www.youporn.com",
+
+    # SpankBang
+    "spankbang.com", "www.spankbang.com",
+
+    # Eporner
+    "eporner.com", "www.eporner.com",
+
+    # Tube8
+    "tube8.com", "www.tube8.com",
+
+    # TNAFlix
+    "tnaflix.com", "www.tnaflix.com",
+
+    # Image hosting
+    "imgur.com", "i.imgur.com",
+    "imagebam.com", "imageshack.com",
+    "postimg.cc", "postimages.org",
+
+    # Common CDN / media hosting
+    "cloudinary.com",
+    "res.cloudinary.com",
+    "akamaized.net",
+    "akamaihd.net",
+    "cloudfront.net",
+    "fastly.net",
+    "cdn.jsdelivr.net",
+    "images.unsplash.com",
 }
 
 DOWNLOAD_JOBS = {}
