@@ -133,7 +133,7 @@ pip install -U yt-dlp
 | `SECRET_KEY` | Flask secret key |
 | `ADMIN_KEY` | Key required as `?key=` on `/admin` |
 | `FFMPEG_PATH` / `FFPROBE_PATH` | Explicit paths if not on `PATH` |
-| `COOKIES_FILE` | Path to a `cookies.txt` file for sites that need a login-free-but-verified session (place a `cookies.txt` next to `app.py` and it is picked up automatically) |
+| `COOKIES_FILE` | Optional explicit path to a user-provided `cookies.txt` file. Cookies are not loaded automatically; public posts are attempted without a login by default. Do not bundle personal cookies in the installer or APK. |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `NOTIFICATION_EMAIL` | Optional email notification for feedback form submissions |
 
 ## Deployment
