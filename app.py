@@ -65,7 +65,7 @@ ALLOWED_HOSTS = {
 
     # Facebook
     "facebook.com", "www.facebook.com",
-    "m.facebook.com", "fb.watch",
+    "m.facebook.com", "fb.com", "www.fb.com", "fb.watch",
 
     # X / Twitter
     "twitter.com", "www.twitter.com",
@@ -297,6 +297,7 @@ def platform_for(url):
     if host in {
         "facebook.com",
         "m.facebook.com",
+        "fb.com",
         "fb.watch",
     }:
         return "Facebook"
@@ -1256,7 +1257,7 @@ def api_images_download():
 
                 content_type = (response.headers.get("Content-Type") or "").lower()
                 if not content_type.startswith("image/"):
-                    raise ValueError("TikTok returned a file that is not an image.")
+                    raise ValueError(f"{platform_for(url)} returned a file that is not an image.")
 
                 extension = Path(urlparse(image_url).path).suffix.lower()
                 if extension not in IMAGE_EXTENSIONS:
@@ -1272,16 +1273,16 @@ def api_images_download():
             archive_buffer,
             mimetype="application/zip",
             as_attachment=True,
-            download_name="tiktok-photo-album.zip",
+            download_name=f"{platform_for(url).lower().replace(' ', '-')}-images.zip",
         )
 
     except ValueError as error:
         return jsonify({"ok": False, "error": str(error)}), 400
     except requests.RequestException as error:
-        app.logger.warning("TikTok image download request failed: %s", error)
+        app.logger.warning("%s image download request failed: %s", platform_for(url), error)
         return jsonify({
             "ok": False,
-            "error": "An image could not be downloaded from TikTok. Please fetch the album again and retry."
+            "error": f"An image could not be downloaded from {platform_for(url)}. Please fetch the gallery again and retry."
         }), 502
     except Exception as error:
         app.logger.exception("TikTok image ZIP creation failed")
