@@ -343,7 +343,7 @@ fetchButton.addEventListener("click", async () => {
           const path = parsed.pathname.toLowerCase();
           return (
             (host === "facebook.com" || host.endsWith(".facebook.com") || host === "fb.com")
-            && (/^\/share\/p\//.test(path) || /^\/photo\//.test(path) || /^\/photos\//.test(path))
+            && (path.startsWith("/share/p/") || path.startsWith("/photo/") || path.startsWith("/photos/") || path.startsWith("/posts/"))
           );
         } catch (_) {
           return false;
