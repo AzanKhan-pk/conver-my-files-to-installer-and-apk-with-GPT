@@ -600,7 +600,8 @@ function createDownloadPanel(downloadButton) {
     </div>
   `;
 
-  downloadButton.replaceWith(panel);
+  const activityList = $("#downloadActivityList");
+  (activityList || downloadButton.parentElement).appendChild(panel);
 
   window.currentDownloadJobId = null;
 
@@ -766,6 +767,8 @@ async function monitorDownload(jobId) {
       total,
       speed
     );
+
+    updateDownloadNotification(job);
 
     if (
       job.status === "starting" ||
@@ -958,6 +961,9 @@ async function monitorDownload(jobId) {
       );
 
       disableDownloadControls();
+      await showCompletedNotification(job);
+      await loadDownloadHistory();
+      removeDownloadPanel();
 
       break;
     }
@@ -1189,6 +1195,63 @@ const historyClose = $("#historyClose");
 const historyBackdrop = $("#historyBackdrop");
 const historyList = $("#historyList");
 const historyCount = $("#historyCount");
+const enableNotificationsButton = $("#enableNotificationsBtn");
+let lastNotificationUpdate = 0;
+
+enableNotificationsButton?.addEventListener("click", async () => {
+  if (!("Notification" in window)) {
+    alert("This browser does not support notifications.");
+    return;
+  }
+  try {
+    const permission = await Notification.requestPermission();
+    if (permission === "granted") {
+      enableNotificationsButton.textContent = "Notifications enabled";
+      enableNotificationsButton.disabled = true;
+    } else {
+      alert("Please allow notifications for SaveVido in your browser settings.");
+    }
+  } catch (error) {
+    alert(error.message || "Could not enable notifications.");
+  }
+});
+
+async function postDownloadNotification(title, body, tag) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    const registration = await navigator.serviceWorker.ready;
+    await registration.showNotification(title, {
+      body,
+      tag: `savevido-${tag}`,
+      renotify: false,
+      silent: true,
+      icon: "/static/icon-192.png",
+      badge: "/static/icon-192.png"
+    });
+  } catch (error) {
+    console.debug("SaveVido notification unavailable:", error);
+  }
+}
+
+function updateDownloadNotification(job) {
+  const now = Date.now();
+  if (now - lastNotificationUpdate < 5000) return;
+  lastNotificationUpdate = now;
+  const percent = Number(job.percent || 0).toFixed(0);
+  const amount = formatBytes(job.downloaded_bytes || 0);
+  const total = formatBytes(job.total_bytes || 0);
+  const title = job.title || "Your download";
+  postDownloadNotification("SaveVido · Downloading", `${title} — ${percent}% · ${amount} / ${total}`, job.id);
+}
+
+async function showCompletedNotification(job) {
+  await postDownloadNotification(
+    "SaveVido · Download complete",
+    job.title || "Your file is ready.",
+    job.id
+  );
+}
 
 function setHistoryOpen(open) {
   if (!historyDrawer) return;
