@@ -715,8 +715,19 @@ def facebook_photo_page_urls(url):
     ):
         return []
 
-    if "/login" in final.path.lower() or response.status_code >= 400:
-        app.logger.info("Facebook post is not publicly accessible to the image extractor")
+    if (
+        "/login" in final.path.lower()
+        or "/checkpoint" in final.path.lower()
+        or response.status_code in {401, 403}
+    ):
+        app.logger.info("Facebook requires an authorized session for this post")
+        raise PermissionError(
+            "Facebook requires an authorized session to read this post. "
+            "The app will only process posts your account is allowed to view."
+        )
+
+    if response.status_code >= 400:
+        app.logger.info("Facebook post page returned HTTP %s", response.status_code)
         return []
 
     page = response.text or ""
@@ -772,12 +783,13 @@ def run_gallery_dl_urls(url):
         app.logger.warning("gallery-dl could not process %s: %s", source_platform, error)
         return []
 
+    diagnostic = (result.stderr or "") + "\\n" + (result.stdout or "")
     if result.returncode != 0:
         app.logger.warning(
             "gallery-dl extraction failed for %s (exit %s): %s",
             source_platform,
             result.returncode,
-            (result.stderr or result.stdout or "No details returned")[-1200:],
+            diagnostic[-1200:],
         )
 
     image_urls = []
@@ -788,6 +800,33 @@ def run_gallery_dl_urls(url):
         extension = Path(urlparse(media_url).path).suffix.lower()
         if extension in IMAGE_EXTENSIONS and media_url not in image_urls:
             image_urls.append(media_url)
+
+    # Preserve the extractor's important access/rate-limit diagnosis instead
+    # of turning every failed Instagram request into "no supported images".
+    if not image_urls and source_platform == "Instagram":
+        lowered = diagnostic.lower()
+        if any(term in lowered for term in (
+            "redirect to login", "login required", "authentication required",
+            "requires authentication", "cookies", "please log in",
+        )):
+            raise PermissionError(
+                "Instagram requires an authorized session to access this post. "
+                "Only content your account is allowed to view can be processed."
+            )
+        if any(term in lowered for term in (
+            "checkpoint", "challenge_required", "challenge page",
+        )):
+            raise PermissionError(
+                "Instagram is requesting an account security check, so this post "
+                "cannot be read by the extractor right now."
+            )
+        if any(term in lowered for term in (
+            "429", "too many requests", "rate limit",
+        )):
+            raise RuntimeError(
+                "Instagram is temporarily limiting requests. Wait a while and try again."
+            )
+
     return image_urls
 
 
