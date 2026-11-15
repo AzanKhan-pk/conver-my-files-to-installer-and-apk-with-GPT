@@ -274,17 +274,17 @@ fetchButton.addEventListener("click", async () => {
     const isImageCandidate = (() => {
       try {
         const parsed = new URL(url);
-        const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
         const path = parsed.pathname.toLowerCase();
 
-        return /\\.(jpe?g|png|webp|gif|avif)$/i.test(path)
-          || (host.endsWith("tiktok.com") && /\\/photo\\//i.test(path))
+        return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
+          || (host.endsWith("tiktok.com") && /\/photo\//i.test(path))
           || (host === "pinterest.com" || host === "pin.it" || host.endsWith(".pinterest.com"))
-          || (host === "instagram.com" && /\\/(p|tv|reel)\\//i.test(path))
+          || (host === "instagram.com" && /\/(p|tv|reel)\//i.test(path))
           || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com"))
-              && /\\/(photo|photos|posts|permalink)\\//i.test(path))
-          || ((host === "x.com" || host === "twitter.com") && /\\/status\\//i.test(path))
-          || ((host === "reddit.com" || host === "redd.it") && /\\/(comments|gallery)\\//i.test(path));
+              && /\/(photo|photos|posts|permalink)\//i.test(path))
+          || ((host === "x.com" || host === "twitter.com") && /\/status\//i.test(path))
+          || ((host === "reddit.com" || host === "redd.it") && /\/(comments|gallery)\//i.test(path));
       } catch (_) {
         return false;
       }
