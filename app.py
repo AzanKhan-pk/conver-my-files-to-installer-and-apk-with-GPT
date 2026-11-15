@@ -827,9 +827,11 @@ def get_media_info(url):
     # resilient defaults for the actual download operation.
     options = base_ydl_options()
     options.update({
-        "retries": 1,
-        "extractor_retries": 1,
-        "socket_timeout": 10,
+        # Fetch is a preview operation: do not spend a long time retrying
+        # an unresponsive social site. Actual downloads keep base retries.
+        "retries": 0,
+        "extractor_retries": 0,
+        "socket_timeout": 8,
     })
     return extract_info_with_retry(url, download=False, options=options)
 
