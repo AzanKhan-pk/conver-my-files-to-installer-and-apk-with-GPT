@@ -1204,7 +1204,7 @@ function renderDownloadHistory(items) {
   if (!historyList) return;
   if (historyCount) historyCount.textContent = String(items.length);
   if (!items.length) {
-    historyList.innerHTML = '<p class="history-empty">No downloads yet. Completed downloads will appear here.</p>';
+    historyList.innerHTML = '<p class="history-empty">No downloads yet. Completed and resumable downloads will appear here.</p>';
     return;
   }
 
@@ -1213,18 +1213,34 @@ function renderDownloadHistory(items) {
     const meta = [item.platform, item.quality, item.file_type, formatBytes(item.file_size || 0)]
       .filter(Boolean).map(escapeHtml).join(" · ");
     const date = escapeHtml(item.created_at || "");
-    const openButton = item.job_id && item.file_exists
-      ? `<button type="button" class="history-open-folder" data-open-job="${escapeHtml(item.job_id)}">Open folder</button>`
-      : '<span class="history-file-missing">File unavailable</span>';
+    const status = item.status || "completed";
+    const jobId = item.job_id ? escapeHtml(item.job_id) : "";
+    const active = ["starting", "preparing", "downloading", "processing"].includes(status);
+    const resumable = ["paused", "network_error"].includes(status);
+    const removeButton = item.id
+      ? `<button type="button" class="history-remove" data-remove-history="${Number(item.id)}" aria-label="Remove from history">×</button>`
+      : "";
+    let action = '<span class="history-file-missing">File unavailable</span>';
+    if (status === "completed" && item.job_id && item.file_exists) {
+      action = `<button type="button" class="history-open-folder" data-open-job="${jobId}">Open folder</button>`;
+    } else if (resumable) {
+      action = `<button type="button" class="history-open-folder" data-resume-job="${jobId}">Resume</button>`;
+    } else if (active) {
+      action = `<button type="button" class="history-open-folder" data-pause-job="${jobId}">Pause</button>`;
+    }
+    const progress = status === "completed"
+      ? "Completed"
+      : `${escapeHtml(status.replaceAll("_", " "))} · ${Number(item.percent || 0).toFixed(1)}% · ${formatBytes(item.downloaded_bytes || 0)} / ${formatBytes(item.total_bytes || 0)}`;
     return `
-      <article class="history-item" data-history-id="${Number(item.id)}">
+      <article class="history-item" data-history-id="${Number(item.id) || ""}" data-job-id="${jobId}">
         <div class="history-item-heading">
           <strong title="${title}">${title}</strong>
-          <button type="button" class="history-remove" data-remove-history="${Number(item.id)}" aria-label="Remove from history">×</button>
+          ${removeButton}
         </div>
         <p>${meta}</p>
         <small>${date}</small>
-        <div class="history-item-actions">${openButton}</div>
+        <div class="history-live-progress">${progress}</div>
+        <div class="history-item-actions">${action}</div>
       </article>
     `;
   }).join("");
@@ -1248,6 +1264,31 @@ historyToggle?.addEventListener("click", () => {
 historyClose?.addEventListener("click", () => setHistoryOpen(false));
 historyBackdrop?.addEventListener("click", () => setHistoryOpen(false));
 
+async function monitorHistoryJob(jobId, itemElement) {
+  while (itemElement?.isConnected) {
+    await new Promise(resolve => setTimeout(resolve, 1200));
+    try {
+      const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/status`);
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Status unavailable.");
+      const job = data.job;
+      const statusElement = itemElement.querySelector(".history-live-progress");
+      if (statusElement) {
+        statusElement.textContent =
+          `${job.status} · ${Number(job.percent || 0).toFixed(1)}% · ${formatBytes(job.downloaded_bytes || 0)} / ${formatBytes(job.total_bytes || 0)}`;
+      }
+      if (["paused", "network_error", "completed", "error", "cancelled"].includes(job.status)) {
+        await loadDownloadHistory();
+        return;
+      }
+    } catch (error) {
+      const statusElement = itemElement.querySelector(".history-live-progress");
+      if (statusElement) statusElement.textContent = error.message || "Waiting for status…";
+      return;
+    }
+  }
+}
+
 historyList?.addEventListener("click", async (event) => {
   const removeButton = event.target.closest("[data-remove-history]");
   if (removeButton) {
@@ -1261,6 +1302,39 @@ historyList?.addEventListener("click", async (event) => {
     } catch (error) {
       removeButton.disabled = false;
       alert(error.message || "Could not remove history item.");
+    }
+    return;
+  }
+
+  const resumeButton = event.target.closest("[data-resume-job]");
+  if (resumeButton) {
+    const jobId = resumeButton.dataset.resumeJob;
+    const itemElement = resumeButton.closest(".history-item");
+    resumeButton.disabled = true;
+    try {
+      const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/resume`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not resume download.");
+      await monitorHistoryJob(jobId, itemElement);
+    } catch (error) {
+      resumeButton.disabled = false;
+      alert(error.message || "Could not resume download.");
+    }
+    return;
+  }
+
+  const pauseButton = event.target.closest("[data-pause-job]");
+  if (pauseButton) {
+    const jobId = pauseButton.dataset.pauseJob;
+    pauseButton.disabled = true;
+    try {
+      const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/pause`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not pause download.");
+      await loadDownloadHistory();
+    } catch (error) {
+      pauseButton.disabled = false;
+      alert(error.message || "Could not pause download.");
     }
     return;
   }
