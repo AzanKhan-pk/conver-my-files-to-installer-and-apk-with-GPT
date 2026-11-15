@@ -126,6 +126,70 @@ ALLOWED_HOSTS = {
     "i.pinimg.com", "images.pinimg.com",
     "v.pinimg.com",
 
+    # Darkero
+    "darkero.co", "www.darkero.co",
+    "darkero.com", "www.darkero.com",
+    "files.darkero.com",
+
+    # Baddielatina
+    "baddielatina.com",
+    "www.baddielatina.com",
+    "files.baddielatina.com",
+
+    # Pornhub
+    "pornhub.com", "www.pornhub.com",
+    "m.pornhub.com",
+    "pornhub.org",
+    "pornhubpremium.com",
+    "phncdn.com",
+    "www.phncdn.com",
+    "ci.phncdn.com",
+    "ei.phncdn.com",
+    "di.phncdn.com",
+    "thumbs.phncdn.com",
+
+    # XNXX
+    "xnxx.com", "www.xnxx.com",
+    "m.xnxx.com",
+    "xnxx.tv",
+    "xnxx.health",
+    "xnxx-cdn.com",
+
+    # Xvideos
+    "xvideos.com", "www.xvideos.com",
+    "xvideos.red",
+    "xvideos-cdn.com",
+
+    # Xhamster
+    "xhamster.com", "www.xhamster.com",
+    "xhamster.desi",
+    "xhcdn.com",
+
+    # XVideos-style media hosting
+    "xv-cdn.com",
+
+    # Stripchat
+    "stripchat.com", "www.stripchat.com",
+    "static.stripchat.com",
+
+    # RedTube
+    "redtube.com", "www.redtube.com",
+
+    # YouPorn
+    "youporn.com", "www.youporn.com",
+
+    # SpankBang
+    "spankbang.com", "www.spankbang.com",
+
+    # Eporner
+    "eporner.com", "www.eporner.com",
+
+    # Tube8
+    "tube8.com", "www.tube8.com",
+
+    # TNAFlix
+    "tnaflix.com", "www.tnaflix.com",
+
     # Image hosting
     "imgur.com", "i.imgur.com",
     "imagebam.com", "imageshack.com",
@@ -141,6 +205,7 @@ ALLOWED_HOSTS = {
     "cdn.jsdelivr.net",
     "images.unsplash.com",
 }
+
 
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
