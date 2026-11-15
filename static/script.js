@@ -1321,3 +1321,9 @@ browseLocationButton?.addEventListener("click", async () => {
 });
 
 refreshDownloadLocation();
+
+
+// A shared Android link is prefilled for the user to review before fetching.
+if (urlInput?.value?.trim()) {
+  setStatus("Shared link received. Fetch media to review it before downloading.", "success");
+}
