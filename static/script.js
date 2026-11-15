@@ -1225,8 +1225,10 @@ function renderDownloadHistory(items) {
       action = `<button type="button" class="history-open-folder" data-open-job="${jobId}">Open folder</button>`;
     } else if (resumable) {
       action = `<button type="button" class="history-open-folder" data-resume-job="${jobId}">Resume</button>`;
-    } else if (active) {
+    } else if (status === "downloading") {
       action = `<button type="button" class="history-open-folder" data-pause-job="${jobId}">Pause</button>`;
+    } else if (active) {
+      action = '<span class="history-file-missing">Working…</span>';
     }
     const progress = status === "completed"
       ? "Completed"
