@@ -547,10 +547,7 @@ def base_ydl_options():
             else ffmpeg_path
         )
 
-    cookies_path = os.getenv(
-        "COOKIES_FILE",
-        str(BASE_DIR / "cookies.txt")
-    )
+    cookies_path = os.getenv("COOKIES_FILE", "").strip()
 
     if Path(cookies_path).is_file():
         options["cookiefile"] = cookies_path
@@ -698,7 +695,7 @@ def facebook_photo_page_urls(url):
         response = facebook_request_session().get(
             url,
             allow_redirects=True,
-            timeout=(3, 4),
+            timeout=(6, 8),
         )
     except requests.Timeout as error:
         app.logger.warning("Facebook post request timed out: %s", error)
@@ -778,7 +775,7 @@ def run_gallery_dl_urls(url):
             command,
             capture_output=True,
             text=True,
-            timeout=7 if source_platform in {"Facebook", "Instagram"} else 35,
+            timeout=18 if source_platform in {"Facebook", "Instagram"} else 35,
             check=False,
         )
     except subprocess.TimeoutExpired as error:
