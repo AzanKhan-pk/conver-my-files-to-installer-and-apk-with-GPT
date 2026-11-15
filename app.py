@@ -683,9 +683,10 @@ def facebook_photo_page_urls(url):
     page = response.text or ""
     photo_ids = []
     patterns = (
-        r'(?:photo(?:\\/|/)(?:\\?)?[^"\\']*?fbid=)(\\d{6,})',
-        r'["\\']fbid["\\']\\s*:\\s*["\\']?(\\d{6,})',
-        r'[?&]fbid=(\\d{6,})',
+        r"/photo/\?[^\"']*fbid=(\d{6,})",
+        r'"fbid"\s*:\s*"?( \d{6,})'.replace("?( ","?("),
+        r"[?&]fbid=(\d{6,})",
+    )
     )
     for pattern in patterns:
         for photo_id in re.findall(pattern, page, flags=re.IGNORECASE):
