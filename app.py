@@ -284,6 +284,46 @@ def init_db():
                 )
 
 
+def save_job_state(job):
+    """Persist one job snapshot so it survives app and computer restarts."""
+    if not job or not job.get("id"):
+        return
+    payload = json.dumps(job, ensure_ascii=False)
+    with get_db() as connection:
+        connection.execute(
+            """
+            INSERT OR REPLACE INTO download_jobs(job_id, payload, updated_at)
+            VALUES (?, ?, ?)
+            """,
+            (job["id"], payload, now_iso()),
+        )
+
+
+def restore_download_jobs():
+    """Load saved jobs and turn interrupted jobs into resumable paused jobs."""
+    with get_db() as connection:
+        rows = connection.execute(
+            "SELECT job_id, payload FROM download_jobs"
+        ).fetchall()
+
+    for row in rows:
+        try:
+            job = json.loads(row["payload"])
+            if job.get("status") in {
+                "starting", "preparing", "downloading", "processing"
+            }:
+                job["status"] = "paused"
+                job["speed"] = 0
+                job["eta"] = None
+                job["pause_requested"] = False
+                job["cancel_requested"] = False
+                job["error"] = "App restarted. Press Resume to continue."
+            DOWNLOAD_JOBS[job["id"]] = job
+            save_job_state(job)
+        except (ValueError, TypeError, KeyError):
+            app.logger.exception("Could not restore a saved download job")
+
+
 def now_iso():
     return datetime.now(timezone.utc).strftime(
         "%Y-%m-%d %H:%M:%S UTC"
