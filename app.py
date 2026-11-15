@@ -267,6 +267,22 @@ def init_db():
             """
         )
 
+        # Migrate existing SaveVido databases without deleting old history.
+        existing_columns = {
+            row["name"] for row in connection.execute(
+                "PRAGMA table_info(downloads)"
+            ).fetchall()
+        }
+        for column, definition in (
+            ("job_id", "TEXT"),
+            ("file_path", "TEXT"),
+            ("file_size", "INTEGER"),
+        ):
+            if column not in existing_columns:
+                connection.execute(
+                    f"ALTER TABLE downloads ADD COLUMN {column} {definition}"
+                )
+
 
 def now_iso():
     return datetime.now(timezone.utc).strftime(
