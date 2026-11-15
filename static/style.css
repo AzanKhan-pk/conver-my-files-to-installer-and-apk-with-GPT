@@ -496,3 +496,53 @@ select option{background:var(--surface);color:var(--ink)}
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+
+/* TikTok album selection and ZIP download controls */
+.image-gallery-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 14px 0;
+  color: var(--text, inherit);
+  font-size: 14px;
+}
+.image-gallery-selection label,
+.image-select-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+}
+.image-select-label {
+  position: absolute;
+  z-index: 1;
+  top: 8px;
+  left: 8px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, .88);
+  color: #fff;
+  font-size: 12px;
+}
+.image-select-checkbox,
+#selectAllImages {
+  width: 16px;
+  height: 16px;
+  accent-color: #2563eb;
+}
+.image-gallery-item {
+  position: relative;
+}
+#downloadSelectedImagesBtn {
+  margin-top: 14px;
+  width: 100%;
+  min-height: 44px;
+  cursor: pointer;
+}
+#downloadSelectedImagesBtn:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+}
