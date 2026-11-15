@@ -499,34 +499,55 @@ IMAGE_EXTENSIONS = {
 
 
 def get_gallery_image_urls(url):
+    command = [
+        sys.executable,
+        "-m",
+        "gallery_dl",
+        "--get-urls",
+    ]
+
+    # Reuse the same optional cookies.txt file used by the downloader.
+    # Never log or return cookie contents.
+    cookies_path = os.getenv(
+        "COOKIES_FILE",
+        str(BASE_DIR / "cookies.txt")
+    )
+    if Path(cookies_path).is_file():
+        command.extend(["--cookies", cookies_path])
+
+    command.append(url)
+
     try:
         result = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "gallery_dl",
-                "--get-urls",
-                url,
-            ],
+            command,
             capture_output=True,
             text=True,
-            timeout=90,
+            timeout=120,
             check=False,
         )
-
-    except (subprocess.TimeoutExpired, OSError):
+    except subprocess.TimeoutExpired:
+        app.logger.warning("gallery-dl timed out while extracting %s", platform_for(url))
+        return []
+    except OSError as error:
+        app.logger.warning("Could not start gallery-dl: %s", error)
         return []
 
-    image_urls = []
+    if result.returncode != 0:
+        # Keep the detailed extractor error in the local server log only.
+        app.logger.warning(
+            "gallery-dl extraction failed for %s (exit %s): %s",
+            platform_for(url),
+            result.returncode,
+            (result.stderr or result.stdout or "No details returned")[-1200:],
+        )
 
+    image_urls = []
     for line in result.stdout.splitlines():
         media_url = line.strip()
-
         if not media_url.startswith(("https://", "http://")):
             continue
 
         extension = Path(urlparse(media_url).path).suffix.lower()
-
         if extension in IMAGE_EXTENSIONS and media_url not in image_urls:
             image_urls.append(media_url)
 
