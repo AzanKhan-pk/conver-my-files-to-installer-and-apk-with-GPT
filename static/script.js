@@ -356,11 +356,11 @@ fetchButton.addEventListener("click", async () => {
       const socialPostKind = (() => {
         try {
           const parsed = new URL(url);
-          const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+          const host = parsed.hostname.toLowerCase();
           const path = parsed.pathname.toLowerCase();
-          const isFacebook = host === "facebook.com" || host.endsWith(".facebook.com")
-            || host === "fb.com" || host === "fb.watch";
-          const isInstagram = host === "instagram.com";
+          const isFacebook = host === "facebook.com" || host === "www.facebook.com"
+            || host.endsWith(".facebook.com") || host === "fb.com" || host === "fb.watch";
+          const isInstagram = host === "instagram.com" || host === "www.instagram.com";
           if (isFacebook && (
             path.startsWith("/share/p/") || path.startsWith("/photo/")
             || path.startsWith("/photos/") || path.startsWith("/posts/")
