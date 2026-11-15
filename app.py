@@ -1566,8 +1566,6 @@ def api_images_download():
                         ".ttvnw.net", ".jtvnw.net", ".twitchcdn.net",
                         ".sndcdn.com",
                         ".hdslb.com",
-                        ".darkero.com",
-                        ".baddielatina.com",
                     )
                 )
                 if not trusted_host:
