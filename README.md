@@ -145,3 +145,20 @@ pip install -U yt-dlp
   serverless platforms are a poor fit for this app's background download
   threads and temp-file usage regardless of extraction method — a
   long-running host (Docker/Railway/a VPS) is recommended for real use.
+
+
+## Windows tray mode
+
+For a local Windows desktop session, install the requirements and run:
+
+```bat
+python -m pip install -r requirements.txt
+python desktop_launcher.py
+```
+
+SaveVido opens in your browser and stays running in the Windows notification
+area (system tray) when you close the browser tab. Use the tray menu to reopen
+SaveVido, open the downloads folder, or exit. If Windows shuts down or the
+process is exited, unfinished jobs are saved and can be resumed the next time
+SaveVido starts. This is not a Windows Service and does not keep downloads
+running while the PC is powered off.
