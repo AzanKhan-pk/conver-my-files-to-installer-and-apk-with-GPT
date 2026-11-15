@@ -653,22 +653,10 @@
               </select>
             </label>
 
-            <label>
-
+            <label class="download-location-label">
               Download location
-
-              <select>
-
-                <option>
-                  Browser downloads
-                </option>
-
-                <option>
-                  Ask every time
-                </option>
-
-              </select>
-
+              <span id="downloadLocationPath" class="download-location-path">Loading folder…</span>
+              <button id="browseDownloadLocationBtn" class="browse-location-button" type="button">Browse location</button>
             </label>
 
 
@@ -1458,7 +1446,7 @@
   <!-- MAIN JAVASCRIPT -->
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261115-3"
+    src="{{ url_for('static', filename='script.js') }}?v=20261115-5"
   ></script>
 
 
