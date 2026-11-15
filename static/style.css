@@ -744,3 +744,22 @@ select option{background:var(--surface);color:var(--ink)}
   .history-toggle { top: auto; bottom: 18px; }
   .history-drawer { width: min(100vw, 420px); }
 }
+
+
+.download-location-label { display: grid; align-content: start; gap: 9px; }
+.download-location-path {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font: 11px/1.5 "DM Mono", monospace;
+}
+.browse-location-button {
+  justify-self: start;
+  padding: 9px 12px;
+  border: 1px solid var(--line-bright);
+  background: transparent;
+  color: var(--ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+.browse-location-button:disabled { opacity: .55; cursor: wait; }
