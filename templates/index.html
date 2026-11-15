@@ -377,6 +377,18 @@
 
         </p>
 
+        <div class="download-activity-area">
+          <div class="download-activity-actions">
+            <button id="historyToggle" class="history-toggle" type="button" aria-controls="historyDrawer" aria-expanded="false">
+              <span aria-hidden="true">◷</span> History <span id="historyCount" class="history-count">0</span>
+            </button>
+            <button id="enableNotificationsBtn" class="notification-enable-button" type="button">
+              Enable download notifications
+            </button>
+          </div>
+          <div id="downloadActivityList" class="download-activity-list" aria-live="polite"></div>
+        </div>
+
       </div>
 
 
@@ -1445,10 +1457,6 @@
 
   <!-- MAIN JAVASCRIPT -->
 
-  <button id="historyToggle" class="history-toggle" type="button" aria-controls="historyDrawer" aria-expanded="false">
-    <span aria-hidden="true">◷</span> History <span id="historyCount" class="history-count">0</span>
-  </button>
-
   <aside id="historyDrawer" class="history-drawer" aria-label="Download history" aria-hidden="true">
     <div class="history-drawer-head">
       <div>
@@ -1464,7 +1472,7 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261115-6"
+    src="{{ url_for('static', filename='script.js') }}?v=20261115-7"
   ></script>
 
 
