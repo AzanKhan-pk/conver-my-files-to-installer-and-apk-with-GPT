@@ -584,6 +584,26 @@ IMAGE_EXTENSIONS = {
     ".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"
 }
 
+# Safe, non-adult source platforms enabled for image preview/selection.
+# Other video-only platforms continue through the existing yt-dlp route.
+SAFE_IMAGE_SOURCE_HOSTS = {
+    "tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
+    "pinterest.com", "pin.it", "x.com", "twitter.com", "reddit.com", "redd.it",
+    "youtube.com", "youtube-nocookie.com", "youtu.be",
+    "vimeo.com", "dailymotion.com", "dai.ly",
+    "twitch.tv", "soundcloud.com", "snd.sc",
+    "bilibili.com", "b23.tv", "imgur.com",
+    "postimg.cc", "postimages.org", "imageshack.com",
+}
+
+def validate_image_source_url(url):
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    if not any(host == domain or host.endswith("." + domain)
+               for domain in SAFE_IMAGE_SOURCE_HOSTS):
+        raise ValueError(
+            "Image selection is enabled only for supported, safe image platforms."
+        )
+
 
 def facebook_request_session():
     """Create a requests session using only an optional user-provided cookie file."""
@@ -1364,6 +1384,7 @@ def api_images_info():
             }), 400
 
         url = clean_url(raw_url)
+        validate_image_source_url(url)
         image_urls = get_gallery_image_urls(url)
 
         if not image_urls:
@@ -1413,6 +1434,7 @@ def api_images_download():
     try:
         payload = request.get_json(silent=True) or {}
         url = clean_url(payload.get("url", ""))
+        validate_image_source_url(url)
 
         parsed = urlparse(url)
         host = (parsed.hostname or "").lower().removeprefix("www.")
