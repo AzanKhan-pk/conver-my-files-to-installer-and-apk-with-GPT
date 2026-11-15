@@ -274,26 +274,23 @@ fetchButton.addEventListener("click", async () => {
     const isImageCandidate = (() => {
       try {
         const parsed = new URL(url);
-        const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+        const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
         const path = parsed.pathname.toLowerCase();
         const isHostOrSubdomain = (domain) =>
           host === domain || host.endsWith("." + domain);
 
+        // Image-capable checks are attempted only on supported, non-adult
+        // content platforms. The extractor decides whether a page has images.
         const supportedImageSites = [
-          "tiktok.com",
-          "instagram.com",
-          "facebook.com",
-          "fb.com",
-          "fb.watch",
-          "pinterest.com",
-          "pin.it",
-          "x.com",
-          "twitter.com",
-          "reddit.com",
-          "redd.it"
+          "tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
+          "pinterest.com", "pin.it", "x.com", "twitter.com", "reddit.com", "redd.it",
+          "youtube.com", "youtube-nocookie.com", "youtu.be",
+          "vimeo.com", "dailymotion.com", "dai.ly",
+          "twitch.tv", "soundcloud.com", "snd.sc",
+          "bilibili.com", "b23.tv", "darkero.co", "darkero.com", "baddielatina.com"
         ];
 
-        return /\\.(jpe?g|png|webp|gif|avif)$/i.test(path)
+        return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
           || supportedImageSites.some(isHostOrSubdomain);
       } catch (_) {
         return false;
