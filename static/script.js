@@ -9,6 +9,7 @@ let selectedMode = "video";
 let selectedQuality = "720p";
 let currentVideo = null;
 let currentImages = null;
+let currentImagePlatform = "";
 
 function setStatus(message, type = "") {
   statusBox.textContent = message;
@@ -77,7 +78,7 @@ function renderImageResult(images) {
     <div class="image-gallery-result">
       <div class="image-gallery-heading">
         <div>
-          <h3>TikTok photo album</h3>
+          <h3>${escapeHtml(currentImagePlatform || "Social media")} image gallery</h3>
           <p>${images.length} images found</p>
         </div>
         <span class="image-gallery-count">${images.length}</span>
@@ -270,51 +271,67 @@ fetchButton.addEventListener("click", async () => {
   currentImages = null;
 
   try {
-    const isTikTokPhoto = (() => {
+    const isImageCandidate = (() => {
       try {
         const parsed = new URL(url);
-        return /(^|\.)tiktok\.com$/i.test(parsed.hostname)
-          && /\/photo\//i.test(parsed.pathname);
+        const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+        const path = parsed.pathname.toLowerCase();
+
+        return /\\.(jpe?g|png|webp|gif|avif)$/i.test(path)
+          || (host.endsWith("tiktok.com") && /\\/photo\\//i.test(path))
+          || (host === "pinterest.com" || host === "pin.it" || host.endsWith(".pinterest.com"))
+          || (host === "instagram.com" && /\\/(p|tv|reel)\\//i.test(path))
+          || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com"))
+              && /\\/(photo|photos|posts|permalink)\\//i.test(path))
+          || ((host === "x.com" || host === "twitter.com") && /\\/status\\//i.test(path))
+          || ((host === "reddit.com" || host === "redd.it") && /\\/(comments|gallery)\\//i.test(path));
       } catch (_) {
         return false;
       }
     })();
 
-    const endpoint = isTikTokPhoto
-      ? "/api/images/info"
-      : "/api/info";
+    let imageData = null;
 
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({ url })
-    });
+    if (isImageCandidate) {
+      try {
+        const imageResponse = await fetch("/api/images/info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url })
+        });
+        const candidate = await imageResponse.json();
 
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        data.error || "Could not read this link."
-      );
+        if (imageResponse.ok && candidate.ok
+            && Array.isArray(candidate.images) && candidate.images.length) {
+          imageData = candidate;
+        }
+      } catch (_) {
+        // If image extraction is unavailable for this post, try the video extractor.
+      }
     }
 
-    if (isTikTokPhoto) {
-      if (!Array.isArray(data.images) || data.images.length === 0) {
-        throw new Error("No images were found in this album.");
-      }
-
-      renderImageResult(data.images);
-      setStatus(`TikTok photo album found: ${data.count || data.images.length} images.`, "success");
-    } else {
-      currentVideo = data.video;
-      renderVideoResult(currentVideo);
-
+    if (imageData) {
+      currentImagePlatform = imageData.platform || "Social media";
+      renderImageResult(imageData.images);
       setStatus(
-        `${currentVideo.platform} media found.`,
+        `${currentImagePlatform} image gallery found: ${imageData.count || imageData.images.length} images.`,
         "success"
       );
+    } else {
+      const response = await fetch("/api/info", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url })
+      });
+      const data = await response.json();
+
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error || "Could not read this link.");
+      }
+
+      currentVideo = data.video;
+      renderVideoResult(currentVideo);
+      setStatus(`${currentVideo.platform} media found.`, "success");
     }
   } catch (error) {
     resultBox.hidden = true;
