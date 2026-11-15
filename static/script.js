@@ -274,7 +274,7 @@ fetchButton.addEventListener("click", async () => {
     const isImageCandidate = (() => {
       try {
         const parsed = new URL(url);
-        const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+          const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
         const path = parsed.pathname.toLowerCase();
 
         return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
@@ -283,7 +283,7 @@ fetchButton.addEventListener("click", async () => {
           || (host === "instagram.com" && /\/(p|tv|reel)\//i.test(path))
           || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com")
                 || host === "fb.com" || host === "fb.watch")
-              && (/\/(photo|photos|posts|permalink|share)\//i.test(path)
+            && (/^\/share\/p\//.test(path) || /^\/photo\//.test(path) || /^\/photos\//.test(path))
                   || /\/(photo|permalink)\.php$/i.test(path)))
           || ((host === "x.com" || host === "twitter.com") && /\/status\//i.test(path))
           || ((host === "reddit.com" || host === "redd.it") && /\/(comments|gallery)\//i.test(path));
@@ -326,11 +326,11 @@ fetchButton.addEventListener("click", async () => {
       const isFacebookPhotoPost = (() => {
         try {
           const parsed = new URL(url);
-          const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+          const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
           const path = parsed.pathname.toLowerCase();
           return (
             (host === "facebook.com" || host.endsWith(".facebook.com") || host === "fb.com")
-            && (/^\\/share\\/p\\//.test(path) || /^\\/photo\\//.test(path) || /^\\/photos\\//.test(path))
+            && (/^\/share\/p\//.test(path) || /^\/photo\//.test(path) || /^\/photos\//.test(path))
           );
         } catch (_) {
           return false;
