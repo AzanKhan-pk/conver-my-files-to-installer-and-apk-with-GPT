@@ -585,7 +585,47 @@ IMAGE_EXTENSIONS = {
 }
 
 
+def normalize_gallery_url(url):
+    """Resolve supported short image links to stable canonical post URLs."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+
+    if host in {"pin.it"}:
+        try:
+            response = requests.get(
+                url,
+                headers={"User-Agent": "Mozilla/5.0"},
+                allow_redirects=True,
+                timeout=(10, 25),
+            )
+            final_url = response.url
+            final = urlparse(final_url)
+            final_host = (final.hostname or "").lower().removeprefix("www.")
+
+            # Only accept redirects that remain on Pinterest.
+            if final.scheme not in {"http", "https"} or final_host not in {
+                "pinterest.com", "m.pinterest.com"
+            }:
+                app.logger.warning("Pinterest short link redirected outside Pinterest")
+                return url
+
+            match = re.search(r"/pin/(\\d+)", final.path)
+            if match:
+                return f"https://www.pinterest.com/pin/{match.group(1)}/"
+        except requests.RequestException as error:
+            app.logger.warning("Could not resolve Pinterest short link: %s", error)
+
+    # Pinterest sometimes redirects a valid pin to a /sent/ tracking URL.
+    if host in {"pinterest.com", "m.pinterest.com"}:
+        match = re.search(r"/pin/(\\d+)", parsed.path)
+        if match:
+            return f"https://www.pinterest.com/pin/{match.group(1)}/"
+
+    return url
+
+
 def get_gallery_image_urls(url):
+    url = normalize_gallery_url(url)
     command = [
         sys.executable,
         "-m",
