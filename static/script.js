@@ -323,6 +323,27 @@ fetchButton.addEventListener("click", async () => {
         "success"
       );
     } else {
+      const isFacebookPhotoPost = (() => {
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+          const path = parsed.pathname.toLowerCase();
+          return (
+            (host === "facebook.com" || host.endsWith(".facebook.com") || host === "fb.com")
+            && (/^\\/share\\/p\\//.test(path) || /^\\/photo\\//.test(path) || /^\\/photos\\//.test(path))
+          );
+        } catch (_) {
+          return false;
+        }
+      })();
+
+      if (isFacebookPhotoPost && imageExtractionError) {
+        throw new Error(
+          "Facebook image extraction: " + imageExtractionError +
+          " Facebook post pages may require an authorized login, and only photos visible to your account can be read."
+        );
+      }
+
       const response = await fetch("/api/info", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
