@@ -1281,3 +1281,43 @@ historyList?.addEventListener("click", async (event) => {
 });
 
 loadDownloadHistory();
+
+
+// Local desktop download-folder selection.
+const browseLocationButton = $("#browseDownloadLocationBtn");
+const downloadLocationPath = $("#downloadLocationPath");
+
+async function refreshDownloadLocation() {
+  if (!downloadLocationPath) return;
+  try {
+    const response = await fetch("/api/download-location");
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Unavailable");
+    downloadLocationPath.textContent = data.path;
+    downloadLocationPath.title = data.path;
+  } catch (_) {
+    downloadLocationPath.textContent = "Available in the local desktop app";
+  }
+}
+
+browseLocationButton?.addEventListener("click", async () => {
+  browseLocationButton.disabled = true;
+  browseLocationButton.textContent = "Choose folder…";
+  try {
+    const response = await fetch("/api/browse-location", { method: "POST" });
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not choose folder.");
+    if (!data.cancelled && downloadLocationPath) {
+      downloadLocationPath.textContent = data.path;
+      downloadLocationPath.title = data.path;
+      setStatus("Download folder updated.", "success");
+    }
+  } catch (error) {
+    setStatus(error.message || "Folder selection is available in the local desktop app.", "error");
+  } finally {
+    browseLocationButton.disabled = false;
+    browseLocationButton.textContent = "Browse location";
+  }
+});
+
+refreshDownloadLocation();
