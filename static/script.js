@@ -357,6 +357,27 @@ fetchButton.addEventListener("click", async () => {
         );
       }
 
+      // Instagram /p/ links are photo or carousel posts. If the gallery
+      // extractor cannot read them, do not send them to the video extractor:
+      // that creates a misleading "No suitable media format" error.
+      const isInstagramPhotoPost = (() => {
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+          const path = parsed.pathname.toLowerCase();
+          return host === "instagram.com" && /^\\/p\\//.test(path);
+        } catch (_) {
+          return false;
+        }
+      })();
+
+      if (isInstagramPhotoPost && imageExtractionError) {
+        throw new Error(
+          "Instagram image extraction: " + imageExtractionError +
+          " This post may require authorized access or may not expose its images to the extractor."
+        );
+      }
+
       const response = await fetch("/api/info", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
