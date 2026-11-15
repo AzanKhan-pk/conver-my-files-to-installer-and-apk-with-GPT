@@ -455,6 +455,12 @@ def humanize_error(error):
     ):
         return "This media is private and cannot be downloaded."
 
+    if "timed out" in lowered or "timeout" in lowered:
+        return (
+            "The social media site took too long to respond. "
+            "Please try again shortly; the app stopped waiting to avoid a long delay."
+        )
+
     if any(word in lowered for word in (
         "login", "sign in", "cookies"
     )):
@@ -645,12 +651,14 @@ def normalize_gallery_url(url):
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
 
-    if host in {"pin.it", "facebook.com", "m.facebook.com", "fb.watch"}:
+    # Full Facebook post URLs do not need a preliminary redirect request.
+    # Resolve only short-link hosts here to avoid making two slow page requests.
+    if host in {"pin.it", "fb.watch"}:
         try:
             response = facebook_request_session().get(
                 url,
                 allow_redirects=True,
-                timeout=(10, 25),
+                timeout=(5, 8),
             )
             final = urlparse(response.url)
             final_host = (final.hostname or "").lower().removeprefix("www.")
@@ -690,8 +698,11 @@ def facebook_photo_page_urls(url):
         response = facebook_request_session().get(
             url,
             allow_redirects=True,
-            timeout=(10, 25),
+            timeout=(5, 8),
         )
+    except requests.Timeout as error:
+        app.logger.warning("Facebook post request timed out: %s", error)
+        raise TimeoutError("Facebook post page timed out while reading images.") from error
     except requests.RequestException as error:
         app.logger.warning("Could not read Facebook post page: %s", error)
         return []
@@ -749,10 +760,15 @@ def run_gallery_dl_urls(url):
             command,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=12 if source_platform in {"Facebook", "Instagram"} else 35,
             check=False,
         )
-    except (subprocess.TimeoutExpired, OSError) as error:
+    except subprocess.TimeoutExpired as error:
+        app.logger.warning("gallery-dl timed out for %s: %s", source_platform, error)
+        raise TimeoutError(
+            f"{source_platform} image extraction timed out after the short response window."
+        ) from error
+    except OSError as error:
         app.logger.warning("gallery-dl could not process %s: %s", source_platform, error)
         return []
 
@@ -776,9 +792,14 @@ def run_gallery_dl_urls(url):
 
 
 def get_gallery_image_urls(url):
-    url = normalize_gallery_url(url)
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
+    # Do not spend a separate HTTP round-trip resolving a full Facebook
+    # post URL; the authorized page reader below follows its own redirect.
+    if host not in {"facebook.com", "m.facebook.com", "www.facebook.com"}:
+        url = normalize_gallery_url(url)
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
     is_facebook = (
         host == "facebook.com"
         or host.endswith(".facebook.com")
