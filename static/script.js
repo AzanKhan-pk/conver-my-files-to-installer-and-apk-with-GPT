@@ -363,9 +363,10 @@ fetchButton.addEventListener("click", async () => {
       const isInstagramPhotoPost = (() => {
         try {
           const parsed = new URL(url);
-          const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
+          const host = parsed.hostname.toLowerCase();
           const path = parsed.pathname.toLowerCase();
-          return host === "instagram.com" && /^\\/p\\//.test(path);
+          return (host === "instagram.com" || host === "www.instagram.com")
+            && path.startsWith("/p/");
         } catch (_) {
           return false;
         }
