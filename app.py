@@ -617,7 +617,7 @@ def validate_image_source_url(url):
 
 
 def facebook_request_session():
-    """Create a requests session using only an optional user-provided cookie file."""
+    """Create a session using cookies only when the user explicitly configures them."""
     session = requests.Session()
     session.headers.update({
         "User-Agent": (
@@ -627,58 +627,60 @@ def facebook_request_session():
         )
     })
 
-    cookies_path = os.getenv(
-        "COOKIES_FILE",
-        str(BASE_DIR / "cookies.txt")
-    )
-    if Path(cookies_path).is_file():
+    cookies_path = os.getenv("COOKIES_FILE", "").strip()
+    if cookies_path and Path(cookies_path).is_file():
         try:
             from http.cookiejar import MozillaCookieJar
             cookie_jar = MozillaCookieJar(cookies_path)
             cookie_jar.load(ignore_discard=True, ignore_expires=True)
             session.cookies.update(cookie_jar)
         except Exception as error:
-            app.logger.warning("Could not load optional Facebook cookies: %s", error)
+            app.logger.warning("Could not load explicitly configured cookies: %s", error)
 
     return session
 
 
 def normalize_gallery_url(url):
-    """Resolve supported short links without following redirects off-site."""
+    """Normalize social post links and safely resolve supported short links."""
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
 
-    # Full Facebook post URLs do not need a preliminary redirect request.
-    # Resolve only short-link hosts here to avoid making two slow page requests.
-    if host in {"pin.it", "fb.watch"}:
+    # Resolve Facebook share links to the final Facebook post URL.
+    # This is a normal public redirect request, not an authentication bypass.
+    should_resolve_facebook = (
+        host in {"facebook.com", "m.facebook.com"}
+        and parsed.path.startswith("/share/")
+    )
+    if host in {"pin.it", "fb.watch"} or should_resolve_facebook:
         try:
             response = facebook_request_session().get(
                 url,
                 allow_redirects=True,
-                timeout=(5, 8),
+                timeout=(5, 10),
             )
             final = urlparse(response.url)
             final_host = (final.hostname or "").lower().removeprefix("www.")
-            allowed_redirect = (
-                final_host in {"pinterest.com", "m.pinterest.com"}
+            allowed_hosts = (
+                {"pinterest.com", "m.pinterest.com"}
                 if host == "pin.it"
-                else (
-                    final_host == "facebook.com"
-                    or final_host.endswith(".facebook.com")
-                    or final_host == "fb.watch"
-                )
+                else {"facebook.com", "m.facebook.com", "fb.watch"}
             )
             if (
                 final.scheme in {"http", "https"}
-                and allowed_redirect
+                and (final_host in allowed_hosts or
+                     (host != "pin.it" and final_host.endswith(".facebook.com")))
             ):
                 if host == "pin.it":
                     match = re.search(r"/pin/(\d+)", final.path)
                     if match:
                         return f"https://www.pinterest.com/pin/{match.group(1)}/"
-                return response.url
+                return response.url.split("#", 1)[0]
         except requests.RequestException as error:
-            app.logger.warning("Could not resolve %s short link: %s", host, error)
+            app.logger.warning("Could not resolve %s link: %s", host, error)
+
+    # Normalize Instagram post links by dropping tracking query parameters.
+    if host == "instagram.com" and re.match(r"^/(p|reel|tv)/[^/]+", parsed.path):
+        return "https://www.instagram.com" + parsed.path.rstrip("/") + "/"
 
     # Remove Pinterest tracking suffixes while preserving the numeric pin ID.
     if host in {"pinterest.com", "m.pinterest.com"}:
@@ -686,20 +688,40 @@ def normalize_gallery_url(url):
         if match:
             return f"https://www.pinterest.com/pin/{match.group(1)}/"
 
-    return url
+    return url.split("#", 1)[0]
 
 
-def facebook_photo_page_urls(url):
-    """Find individual photo URLs embedded in an accessible Facebook post page."""
+def _is_platform_image_url(media_url, platform):
+    """Accept normal image extensions and extensionless URLs from trusted CDNs."""
+    try:
+        parsed = urlparse(media_url)
+        host = (parsed.hostname or "").lower().removeprefix("www.")
+        extension = Path(parsed.path).suffix.lower()
+        if extension in IMAGE_EXTENSIONS:
+            return True
+        if platform == "Facebook":
+            return (
+                host.endswith("fbcdn.net") or host.endswith("fbsbx.com")
+            ) and bool(parsed.path)
+        if platform == "Instagram":
+            return host.endswith("cdninstagram.com") or host.endswith("fbcdn.net")
+    except Exception:
+        return False
+    return False
+
+
+def facebook_page_image_urls(url):
+    """Extract image URLs that Facebook itself exposes in the accessible page HTML."""
     try:
         response = facebook_request_session().get(
             url,
             allow_redirects=True,
-            timeout=(6, 8),
+            timeout=(6, 10),
         )
     except requests.Timeout as error:
-        app.logger.warning("Facebook post request timed out: %s", error)
-        raise TimeoutError("Facebook took too long to respond while checking this post.") from error
+        raise TimeoutError(
+            "Facebook took too long to respond while checking this post."
+        ) from error
     except requests.RequestException as error:
         app.logger.warning("Could not read Facebook post page: %s", error)
         return []
@@ -717,22 +739,68 @@ def facebook_photo_page_urls(url):
         or "/checkpoint" in final.path.lower()
         or response.status_code in {401, 403}
     ):
-        app.logger.info("Facebook requires an authorized session for this post")
         raise PermissionError(
             "Facebook requires an authorized session to read this post. "
-            "The app will only process posts your account is allowed to view."
+            "Only content your account is allowed to view can be processed."
         )
 
     if response.status_code >= 400:
         app.logger.info("Facebook post page returned HTTP %s", response.status_code)
         return []
 
-    page = response.text or ""
+    # Facebook embeds CDN URLs with escaped slashes and HTML entities.
+    page = (response.text or "")
+    page = page.replace("\\/", "/").replace("\\u0026", "&")
+    from html import unescape
+    page = unescape(page)
+
+    image_urls = []
+    pattern = re.compile(r"https?://[^\\s\\"'<>\\\\]+", re.IGNORECASE)
+    for candidate in pattern.findall(page):
+        candidate = candidate.rstrip("),;]")
+        if _is_platform_image_url(candidate, "Facebook"):
+            if candidate not in image_urls:
+                image_urls.append(candidate)
+        if len(image_urls) >= 50:
+            break
+
+    return image_urls
+
+
+def facebook_photo_page_urls(url):
+    """Find individual photo pages embedded in an accessible Facebook post."""
+    try:
+        response = facebook_request_session().get(
+            url,
+            allow_redirects=True,
+            timeout=(6, 10),
+        )
+    except requests.Timeout as error:
+        raise TimeoutError(
+            "Facebook took too long to respond while checking this post."
+        ) from error
+    except requests.RequestException as error:
+        app.logger.warning("Could not read Facebook photo page links: %s", error)
+        return []
+
+    final = urlparse(response.url)
+    final_host = (final.hostname or "").lower().removeprefix("www.")
+    if not (final_host == "facebook.com" or final_host.endswith(".facebook.com")):
+        return []
+    if "/login" in final.path.lower() or "/checkpoint" in final.path.lower() or response.status_code in {401, 403}:
+        raise PermissionError(
+            "Facebook requires an authorized session to read this post. "
+            "Only content your account is allowed to view can be processed."
+        )
+    if response.status_code >= 400:
+        return []
+
+    page = (response.text or "").replace("\\/", "/")
     photo_ids = []
     patterns = (
-        r"/photo/\?[^\"']*fbid=(\d{6,})",
-        r"\"fbid\"\s*:\s*\"?(\d{6,})",
-        r"[?&]fbid=(\d{6,})",
+        r"/photo/\\?[^\\"']*fbid=(\\d{6,})",
+        r"\\"fbid\\"\\s*:\\s*\\"?(\\d{6,})",
+        r"[?&]fbid=(\\d{6,})",
     )
     for pattern in patterns:
         for photo_id in re.findall(pattern, page, flags=re.IGNORECASE):
@@ -753,18 +821,14 @@ def run_gallery_dl_urls(url):
         "--get-urls",
     ]
 
-    cookies_path = os.getenv(
-        "COOKIES_FILE",
-        str(BASE_DIR / "cookies.txt")
-    )
+    # Never load a developer's or another user's cookies implicitly.
+    cookies_path = os.getenv("COOKIES_FILE", "").strip()
     browser_cookies = os.getenv("GALLERY_DL_BROWSER", "").strip()
     if browser_cookies:
-        # Explicit opt-in only: gallery-dl reads the selected local browser
-        # profile. Never enable this automatically or log cookie contents.
         if browser_cookies.startswith("-"):
             raise ValueError("GALLERY_DL_BROWSER must be a browser name/profile, not an option.")
         command.extend(["--cookies-from-browser", browser_cookies])
-    elif Path(cookies_path).is_file():
+    elif cookies_path and Path(cookies_path).is_file():
         command.extend(["--cookies", cookies_path])
 
     urls = [url] if isinstance(url, str) else list(url)
@@ -787,7 +851,7 @@ def run_gallery_dl_urls(url):
         app.logger.warning("gallery-dl could not process %s: %s", source_platform, error)
         return []
 
-    diagnostic = (result.stderr or "") + "\\n" + (result.stdout or "")
+    diagnostic = (result.stderr or "") + "\n" + (result.stdout or "")
     if result.returncode != 0:
         app.logger.warning(
             "gallery-dl extraction failed for %s (exit %s): %s",
@@ -801,17 +865,15 @@ def run_gallery_dl_urls(url):
         media_url = line.strip()
         if not media_url.startswith(("https://", "http://")):
             continue
-        extension = Path(urlparse(media_url).path).suffix.lower()
-        if extension in IMAGE_EXTENSIONS and media_url not in image_urls:
+        if _is_platform_image_url(media_url, source_platform) and media_url not in image_urls:
             image_urls.append(media_url)
 
-    # Preserve the extractor's important access/rate-limit diagnosis instead
-    # of turning every failed Instagram request into "no supported images".
     if not image_urls and source_platform == "Instagram":
         lowered = diagnostic.lower()
         if any(term in lowered for term in (
-            "redirect to login", "login required", "authentication required",
-            "requires authentication", "cookies", "please log in",
+            "redirect to login", "login required", "login_required",
+            "authentication required", "requires authentication",
+            "cookies", "please log in",
         )):
             raise PermissionError(
                 "Instagram requires an authorized session to access this post. "
@@ -835,14 +897,9 @@ def run_gallery_dl_urls(url):
 
 
 def get_gallery_image_urls(url):
+    url = normalize_gallery_url(url)
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
-    # Do not spend a separate HTTP round-trip resolving a full Facebook
-    # post URL; the authorized page reader below follows its own redirect.
-    if host not in {"facebook.com", "m.facebook.com", "www.facebook.com"}:
-        url = normalize_gallery_url(url)
-        parsed = urlparse(url)
-        host = (parsed.hostname or "").lower().removeprefix("www.")
     is_facebook = (
         host == "facebook.com"
         or host.endswith(".facebook.com")
@@ -850,19 +907,22 @@ def get_gallery_image_urls(url):
     )
 
     if is_facebook:
-        # Try gallery-dl's maintained Facebook post/photo extractor first.
-        # This can read supported public posts and, when explicitly enabled,
-        # use the user's own local browser session or cookies.txt.
-        image_urls = run_gallery_dl_urls(url)
+        # Prefer image URLs explicitly present in the accessible public page.
+        # Facebook is not a supported URL in some gallery-dl releases.
+        image_urls = facebook_page_image_urls(url)
         if image_urls:
             return image_urls
 
-        # Compatibility fallback for Facebook pages that expose photo IDs
-        # in their HTML but are not handled by the installed extractor.
+        # Some accessible posts expose individual photo pages rather than
+        # direct CDN URLs. Try those pages as a compatibility fallback.
         photo_pages = facebook_photo_page_urls(url)
-        if not photo_pages:
-            return []
-        return run_gallery_dl_urls(photo_pages)
+        if photo_pages:
+            image_urls = run_gallery_dl_urls(photo_pages)
+            if image_urls:
+                return image_urls
+            return facebook_page_image_urls(photo_pages[0])
+
+        return []
 
     return run_gallery_dl_urls(url)
 
