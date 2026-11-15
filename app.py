@@ -1156,7 +1156,7 @@ def api_images_info():
 
 @app.post("/api/images/download")
 def api_images_download():
-    """Build a ZIP containing the user-selected images from a TikTok photo post."""
+    """Build a ZIP containing user-selected images from a supported public post."""
     try:
         payload = request.get_json(silent=True) or {}
         url = clean_url(payload.get("url", ""))
@@ -1181,7 +1181,7 @@ def api_images_download():
         if not image_urls:
             return jsonify({
                 "ok": False,
-                "error": "No images could be found in this TikTok album."
+                "error": "No supported images could be found in this post."
             }), 400
 
         if any(image_id < 1 or image_id > len(image_urls) for image_id in selected_ids):
@@ -1212,7 +1212,7 @@ def api_images_download():
                     )
                 )
                 if not trusted_host:
-                    raise ValueError("TikTok returned an unexpected image host.")
+                    raise ValueError("The platform returned an unexpected image host.")
 
                 response = requests.get(
                     image_url,
