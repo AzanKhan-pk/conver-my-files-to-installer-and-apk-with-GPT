@@ -14,6 +14,9 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 import yt_dlp
+import requests
+from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
 from yt_dlp.utils import DownloadCancelled as YtDlpStopSignal
 from flask import (
     Flask,
@@ -1148,6 +1151,114 @@ def api_images_info():
             "ok": False,
             "error": humanize_error(error)
         }), 400
+
+
+@app.post("/api/images/download")
+def api_images_download():
+    """Build a ZIP containing the user-selected images from a TikTok photo post."""
+    try:
+        payload = request.get_json(silent=True) or {}
+        url = clean_url(payload.get("url", ""))
+
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        if host.removeprefix("www.") != "tiktok.com" or "/photo/" not in parsed.path:
+            raise ValueError("Only public TikTok photo albums are supported here.")
+
+        raw_ids = payload.get("image_ids")
+        if not isinstance(raw_ids, list) or not raw_ids:
+            raise ValueError("Select at least one image to download.")
+        if len(raw_ids) > 50:
+            raise ValueError("Select no more than 50 images at a time.")
+
+        try:
+            selected_ids = sorted({int(value) for value in raw_ids})
+        except (TypeError, ValueError):
+            raise ValueError("The selected image list is invalid.")
+
+        image_urls = get_gallery_image_urls(url)
+        if not image_urls:
+            return jsonify({
+                "ok": False,
+                "error": "No images could be found in this TikTok album."
+            }), 400
+
+        if any(image_id < 1 or image_id > len(image_urls) for image_id in selected_ids):
+            raise ValueError("One or more selected images are no longer available. Fetch the album again.")
+
+        archive_buffer = BytesIO()
+        total_downloaded = 0
+
+        with ZipFile(archive_buffer, "w", compression=ZIP_DEFLATED) as archive:
+            for image_id in selected_ids:
+                image_url = image_urls[image_id - 1]
+                image_host = (urlparse(image_url).hostname or "").lower()
+                trusted_host = any(
+                    image_host == suffix.lstrip(".") or image_host.endswith(suffix)
+                    for suffix in (
+                        ".tiktokcdn.com",
+                        ".tiktokv.com",
+                        ".byteoversea.com",
+                        ".ibytedtos.com",
+                    )
+                )
+                if not trusted_host:
+                    raise ValueError("TikTok returned an unexpected image host.")
+
+                response = requests.get(
+                    image_url,
+                    headers={"User-Agent": "Mozilla/5.0"},
+                    timeout=(10, 45),
+                    stream=True,
+                )
+                response.raise_for_status()
+
+                image_buffer = BytesIO()
+                image_size = 0
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    image_size += len(chunk)
+                    total_downloaded += len(chunk)
+                    if image_size > 25 * 1024 * 1024 or total_downloaded > 100 * 1024 * 1024:
+                        raise ValueError("The selected images exceed the download size limit.")
+                    image_buffer.write(chunk)
+
+                content_type = (response.headers.get("Content-Type") or "").lower()
+                if not content_type.startswith("image/"):
+                    raise ValueError("TikTok returned a file that is not an image.")
+
+                extension = Path(urlparse(image_url).path).suffix.lower()
+                if extension not in IMAGE_EXTENSIONS:
+                    extension = ".jpg"
+
+                archive.writestr(
+                    f"image_{image_id:03d}{extension}",
+                    image_buffer.getvalue(),
+                )
+
+        archive_buffer.seek(0)
+        return send_file(
+            archive_buffer,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="tiktok-photo-album.zip",
+        )
+
+    except ValueError as error:
+        return jsonify({"ok": False, "error": str(error)}), 400
+    except requests.RequestException as error:
+        app.logger.warning("TikTok image download request failed: %s", error)
+        return jsonify({
+            "ok": False,
+            "error": "An image could not be downloaded from TikTok. Please fetch the album again and retry."
+        }), 502
+    except Exception as error:
+        app.logger.exception("TikTok image ZIP creation failed")
+        return jsonify({
+            "ok": False,
+            "error": humanize_error(error)
+        }), 500
 
 @app.post("/api/download")
 def api_download():
