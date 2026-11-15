@@ -760,7 +760,14 @@ def run_gallery_dl_urls(url):
         "COOKIES_FILE",
         str(BASE_DIR / "cookies.txt")
     )
-    if Path(cookies_path).is_file():
+    browser_cookies = os.getenv("GALLERY_DL_BROWSER", "").strip()
+    if browser_cookies:
+        # Explicit opt-in only: gallery-dl reads the selected local browser
+        # profile. Never enable this automatically or log cookie contents.
+        if browser_cookies.startswith("-"):
+            raise ValueError("GALLERY_DL_BROWSER must be a browser name/profile, not an option.")
+        command.extend(["--cookies-from-browser", browser_cookies])
+    elif Path(cookies_path).is_file():
         command.extend(["--cookies", cookies_path])
 
     urls = [url] if isinstance(url, str) else list(url)
@@ -845,15 +852,17 @@ def get_gallery_image_urls(url):
         or host == "fb.watch"
     )
 
-    # gallery-dl has individual-photo extractors, but Facebook post/share
-    # pages are not a supported post extractor. Discover photo IDs on a
-    # page the current user is already authorized to view, then use the
-    # supported individual-photo extractor for each one.
     if is_facebook:
+        # Try gallery-dl's maintained Facebook post/photo extractor first.
+        # This can read supported public posts and, when explicitly enabled,
+        # use the user's own local browser session or cookies.txt.
+        image_urls = run_gallery_dl_urls(url)
+        if image_urls:
+            return image_urls
+
+        # Compatibility fallback for Facebook pages that expose photo IDs
+        # in their HTML but are not handled by the installed extractor.
         photo_pages = facebook_photo_page_urls(url)
-        # Facebook share/post URLs are not supported by gallery-dl directly.
-        # If the accessible page does not expose photo IDs, stop here rather
-        # than making a second slow request that cannot succeed.
         if not photo_pages:
             return []
         return run_gallery_dl_urls(photo_pages)
