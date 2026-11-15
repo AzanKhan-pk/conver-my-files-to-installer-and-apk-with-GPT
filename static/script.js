@@ -165,8 +165,8 @@ fetchButton.addEventListener("click", async () => {
     const isTikTokPhoto = (() => {
       try {
         const parsed = new URL(url);
-        return /(^|\\.)tiktok\\.com$/i.test(parsed.hostname)
-          && /\\/photo\\//i.test(parsed.pathname);
+        return /(^|\.)tiktok\.com$/i.test(parsed.hostname)
+          && /\/photo\//i.test(parsed.pathname);
       } catch (_) {
         return false;
       }
