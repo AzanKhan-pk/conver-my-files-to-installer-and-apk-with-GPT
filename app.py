@@ -609,7 +609,7 @@ def normalize_gallery_url(url):
                 app.logger.warning("Pinterest short link redirected outside Pinterest")
                 return url
 
-            match = re.search(r"/pin/(\\d+)", final.path)
+            match = re.search(r"/pin/(\d+)", final.path)
             if match:
                 return f"https://www.pinterest.com/pin/{match.group(1)}/"
         except requests.RequestException as error:
@@ -617,7 +617,7 @@ def normalize_gallery_url(url):
 
     # Pinterest sometimes redirects a valid pin to a /sent/ tracking URL.
     if host in {"pinterest.com", "m.pinterest.com"}:
-        match = re.search(r"/pin/(\\d+)", parsed.path)
+        match = re.search(r"/pin/(\d+)", parsed.path)
         if match:
             return f"https://www.pinterest.com/pin/{match.group(1)}/"
 
