@@ -27,7 +27,7 @@ from flask import (
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "analytics.db"
 
-DOWNLOAD_ROOT = Path(tempfile.gettempdir()) / "vidloom_downloads"
+DOWNLOAD_ROOT = Path(tempfile.gettempdir()) / "SaveVido_downloads"
 DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
@@ -602,7 +602,7 @@ def new_download_job(url, mode, quality):
     job_id = uuid.uuid4().hex
 
     temp_dir = Path(tempfile.mkdtemp(
-        prefix="vidloom_",
+        prefix="SaveVido_",
         dir=DOWNLOAD_ROOT
     ))
 
@@ -1346,7 +1346,7 @@ def api_comments():
         )
 
     send_notification(
-        "VidLoom: new feedback",
+        "SaveVido: new feedback",
         f"User name: {name}\nComment: {comment}\nDate/time: {timestamp}",
     )
 

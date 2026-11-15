@@ -1,4 +1,4 @@
-const CACHE_NAME = "vidloom-v1";
+const CACHE_NAME = "SaveVido-v1";
 
 const STATIC_FILES = [
   "/"
