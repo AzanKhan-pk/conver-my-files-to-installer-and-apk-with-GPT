@@ -476,10 +476,9 @@ def humanize_error(error):
         "login", "sign in", "cookies"
     )):
         return (
-            "This media requires an authorized session. "
-            "To opt in to your own Chrome session, launch the app with "
-            "GALLERY_DL_BROWSER=chrome set. If Chrome's cookie database is locked, "
-            "close Chrome completely and restart the app. "
+            "This media requires an authorized session. In the local app, "
+            "enable 'Use my browser session' and try again. If the browser "
+            "cookie database is locked, close the browser and restart the app. "
             "Use only content your account is allowed to view."
         )
 
@@ -640,16 +639,6 @@ def facebook_request_session():
             "Chrome/124.0.0.0 Safari/537.36"
         )
     })
-
-    cookies_path = os.getenv("COOKIES_FILE", "").strip()
-    if cookies_path and Path(cookies_path).is_file():
-        try:
-            from http.cookiejar import MozillaCookieJar
-            cookie_jar = MozillaCookieJar(cookies_path)
-            cookie_jar.load(ignore_discard=True, ignore_expires=True)
-            session.cookies.update(cookie_jar)
-        except Exception as error:
-            app.logger.warning("Could not load explicitly configured cookies: %s", error)
 
     return session
 
@@ -827,7 +816,7 @@ def facebook_photo_page_urls(url):
     ]
 
 
-def run_gallery_dl_urls(url):
+def run_gallery_dl_urls(url, browser_cookies=None):
     command = [
         sys.executable,
         "-m",
@@ -835,15 +824,13 @@ def run_gallery_dl_urls(url):
         "--get-urls",
     ]
 
-    # Never load a developer's or another user's cookies implicitly.
-    cookies_path = os.getenv("COOKIES_FILE", "").strip()
-    browser_cookies = os.getenv("GALLERY_DL_BROWSER", "").strip()
+    # Browser cookies are used only after an explicit per-request opt-in
+    # from the local desktop app. Never read a server/developer session.
     if browser_cookies:
-        if browser_cookies.startswith("-"):
-            raise ValueError("GALLERY_DL_BROWSER must be a browser name/profile, not an option.")
+        allowed_browsers = {"chrome", "edge", "firefox"}
+        if browser_cookies not in allowed_browsers:
+            raise ValueError("Choose Chrome, Edge, or Firefox for local session access.")
         command.extend(["--cookies-from-browser", browser_cookies])
-    elif cookies_path and Path(cookies_path).is_file():
-        command.extend(["--cookies", cookies_path])
 
     urls = [url] if isinstance(url, str) else list(url)
     command.extend(urls)
@@ -900,9 +887,8 @@ def run_gallery_dl_urls(url):
         )):
             raise PermissionError(
                 "Instagram requires an authorized session to access this post. "
-                "To opt in to your own Chrome session, launch the app with "
-                "GALLERY_DL_BROWSER=chrome set. Only content your account is "
-                "allowed to view can be processed."
+                "In the local app, enable 'Use my browser session' and try again. "
+                "Only content your account is allowed to view can be processed."
             )
         if any(term in lowered for term in (
             "checkpoint", "challenge_required", "challenge page",
@@ -921,7 +907,7 @@ def run_gallery_dl_urls(url):
     return image_urls
 
 
-def get_gallery_image_urls(url):
+def get_gallery_image_urls(url, browser_cookies=None):
     url = normalize_gallery_url(url)
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
@@ -949,7 +935,10 @@ def get_gallery_image_urls(url):
 
         return []
 
-    return run_gallery_dl_urls(url)
+    return run_gallery_dl_urls(
+        url,
+        browser_cookies=browser_cookies if platform_for(url) == "Instagram" else None,
+    )
 
 
 def get_media_info(url):
@@ -1556,7 +1545,28 @@ def api_images_info():
 
         url = clean_url(raw_url)
         validate_image_source_url(url)
-        image_urls = get_gallery_image_urls(url)
+
+        use_browser_session = payload.get("use_browser_session") is True
+        browser_name = payload.get("browser") or "chrome"
+        browser_cookies = None
+        if use_browser_session:
+            if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
+                raise PermissionError(
+                    "Browser-session access is available only in the local desktop app. "
+                    "A hosted website cannot read cookies from your device."
+                )
+            if platform_for(url) != "Instagram":
+                raise ValueError(
+                    "The optional browser session is currently supported for Instagram image posts only."
+                )
+            if browser_name not in {"chrome", "edge", "firefox"}:
+                raise ValueError("Choose Chrome, Edge, or Firefox.")
+            browser_cookies = browser_name
+
+        image_urls = get_gallery_image_urls(
+            url,
+            browser_cookies=browser_cookies,
+        )
 
         if not image_urls:
             parsed = urlparse(url)
@@ -1623,7 +1633,27 @@ def api_images_download():
         except (TypeError, ValueError):
             raise ValueError("The selected image list is invalid.")
 
-        image_urls = get_gallery_image_urls(url)
+        use_browser_session = payload.get("use_browser_session") is True
+        browser_name = payload.get("browser") or "chrome"
+        browser_cookies = None
+        if use_browser_session:
+            if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
+                raise PermissionError(
+                    "Browser-session access is available only in the local desktop app. "
+                    "A hosted website cannot read cookies from your device."
+                )
+            if platform_for(url) != "Instagram":
+                raise ValueError(
+                    "The optional browser session is currently supported for Instagram image posts only."
+                )
+            if browser_name not in {"chrome", "edge", "firefox"}:
+                raise ValueError("Choose Chrome, Edge, or Firefox.")
+            browser_cookies = browser_name
+
+        image_urls = get_gallery_image_urls(
+            url,
+            browser_cookies=browser_cookies,
+        )
         if not image_urls:
             return jsonify({
                 "ok": False,
