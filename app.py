@@ -697,8 +697,8 @@ def _is_platform_image_url(media_url, platform):
         parsed = urlparse(media_url)
         host = (parsed.hostname or "").lower().removeprefix("www.")
         extension = Path(parsed.path).suffix.lower()
-        if extension in IMAGE_EXTENSIONS:
-            return True
+        if extension:
+            return extension in IMAGE_EXTENSIONS
         if platform == "Facebook":
             return (
                 host.endswith("fbcdn.net") or host.endswith("fbsbx.com")
