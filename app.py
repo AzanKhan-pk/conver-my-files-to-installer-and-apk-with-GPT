@@ -1832,6 +1832,7 @@ def get_download_location():
 
 @app.post("/api/browse-location")
 def browse_download_location():
+    global DOWNLOAD_ROOT, JOBS_ROOT
     if request.remote_addr not in {"127.0.0.1", "::1"}:
         return jsonify({"ok": False, "error": "Available only in the local desktop app."}), 403
 
@@ -1864,7 +1865,6 @@ def browse_download_location():
                 ("download_root", str(selected_path)),
             )
 
-        global DOWNLOAD_ROOT, JOBS_ROOT
         DOWNLOAD_ROOT = selected_path
         JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
         JOBS_ROOT.mkdir(parents=True, exist_ok=True)
