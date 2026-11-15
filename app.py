@@ -1,6 +1,8 @@
 import os
 import re
 import shutil
+import subprocess
+import sys
 import smtplib
 import sqlite3
 import tempfile
@@ -487,6 +489,45 @@ def extract_info_with_retry(url, download=False, options=None):
 
         raise
 
+
+IMAGE_EXTENSIONS = {
+    ".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif"
+}
+
+
+def get_gallery_image_urls(url):
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "gallery_dl",
+                "--get-urls",
+                url,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=90,
+            check=False,
+        )
+
+    except (subprocess.TimeoutExpired, OSError):
+        return []
+
+    image_urls = []
+
+    for line in result.stdout.splitlines():
+        media_url = line.strip()
+
+        if not media_url.startswith(("https://", "http://")):
+            continue
+
+        extension = Path(urlparse(media_url).path).suffix.lower()
+
+        if extension in IMAGE_EXTENSIONS and media_url not in image_urls:
+            image_urls.append(media_url)
+
+    return image_urls
 
 def get_media_info(url):
     return extract_info_with_retry(url, download=False)
@@ -1004,25 +1045,6 @@ def service_worker():
     response.headers["Cache-Control"] = "no-cache"
     return response
 
-
-@app.route("/sitemap.xml")
-def sitemap():
-    sitemap_xml = """<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-<url><loc>https://avd.up.railway.app/</loc></url>
-<url><loc>https://avd.up.railway.app/about</loc></url>
-<url><loc>https://avd.up.railway.app/how-to-use</loc></url>
-<url><loc>https://avd.up.railway.app/faq</loc></url>
-<url><loc>https://avd.up.railway.app/privacy</loc></url>
-<url><loc>https://avd.up.railway.app/terms</loc></url>
-</urlset>"""
-
-    return sitemap_xml, 200, {
-        "Content-Type": "application/xml"
-    }
-
-
-
 @app.post("/api/info")
 def api_info():
     try:
@@ -1086,6 +1108,46 @@ def api_info():
             "error": humanize_error(error),
         }), 400
 
+
+@app.post("/api/images/info")
+def api_images_info():
+    try:
+        payload = request.get_json(silent=True) or {}
+        raw_url = (payload.get("url") or "").strip()
+
+        if not raw_url:
+            return jsonify({
+                "ok": False,
+                "error": "Please enter an image post URL."
+            }), 400
+
+        url = clean_url(raw_url)
+        image_urls = get_gallery_image_urls(url)
+
+        if not image_urls:
+            return jsonify({
+                "ok": False,
+                "error": "No supported images found in this post."
+            }), 400
+
+        return jsonify({
+            "ok": True,
+            "count": len(image_urls),
+            "images": [
+                {
+                    "id": index + 1,
+                    "url": image_url
+                }
+                for index, image_url in enumerate(image_urls)
+            ]
+        })
+
+    except Exception as error:
+        app.logger.exception("Image extraction failed")
+        return jsonify({
+            "ok": False,
+            "error": humanize_error(error)
+        }), 400
 
 @app.post("/api/download")
 def api_download():
@@ -1369,19 +1431,9 @@ def faq():
 
 @app.get("/terms")
 def terms():
-    return render_template("terms.html")
+    return render_template("terms.html")  
 
-
-@app.get("/robots.txt")
-def robots():
-    return (
-        "User-agent: *\n"
-        "Allow: /\n"
-        "Sitemap: https://avd.up.railway.app/sitemap.xml\n",
-        200,
-        {"Content-Type": "text/plain"},
-    )
-
+    
 
 init_db()
 

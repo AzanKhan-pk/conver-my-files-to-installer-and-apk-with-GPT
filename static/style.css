@@ -283,3 +283,139 @@ select option{background:var(--surface);color:var(--ink)}
         background-position: 200% 50%;
     }
 }
+
+/* =====================================
+   SAVEVIDO SUPPORT NOTICE
+===================================== */
+
+.support-notice {
+  margin: 0 0 24px;
+  padding: 13px 15px;
+  border: 1px solid rgba(255, 65, 65, 0.35);
+  border-left: 3px solid #ff4545;
+  border-radius: 9px;
+  background: rgba(255, 55, 55, 0.055);
+}
+
+.support-details summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  list-style: none;
+  font-size: 12px;
+  color: #ff7777;
+}
+
+.support-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.support-warning {
+  color: #ff4545;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.support-short {
+  flex: 1;
+  color: #ffaaaa;
+}
+
+.support-more {
+  color: #ff5555;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.support-more::after {
+  content: " +";
+}
+
+.support-details[open] .support-more::after {
+  content: " −";
+}
+
+.support-content {
+  padding-top: 13px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.75;
+}
+
+.support-content p {
+  margin: 10px 0;
+}
+
+.support-content ol,
+.support-content ul {
+  padding-left: 22px;
+}
+
+.support-content li {
+  margin: 5px 0;
+}
+
+.support-thanks {
+  color: var(--ink);
+}
+
+.support-contact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 17px;
+}
+
+.support-contact-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 13px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  transition: transform 180ms ease, border-color 180ms ease;
+}
+
+.support-contact-link:hover {
+  transform: translateY(-2px);
+  border-color: #ff7777;
+}
+
+.support-contact-link svg {
+  width: 19px;
+  height: 19px;
+  flex-shrink: 0;
+}
+
+.whatsapp-link svg {
+  color: #25D366;
+}
+
+.email-link svg {
+  color: #EA4335;
+}
+
+@media (max-width: 520px) {
+  .support-notice {
+    padding: 11px;
+  }
+
+  .support-details summary {
+    flex-wrap: wrap;
+    font-size: 11px;
+  }
+
+  .support-short {
+    min-width: 150px;
+  }
+
+  .support-contact-link {
+    flex: 1;
+  }
+}

@@ -1,6 +1,26 @@
 <!doctype html>
 <html lang="en">
 <head>
+
+<!-- SaveVido Favicon -->
+<link
+  rel="icon"
+  type="image/svg+xml"
+  href="{{ url_for('static', filename='favicon.svg') }}"
+>
+
+<link
+  rel="icon"
+  type="image/png"
+  sizes="192x192"
+  href="{{ url_for('static', filename='icon-192.png') }}"
+>
+
+<link
+  rel="apple-touch-icon"
+  href="{{ url_for('static', filename='icon-192.png') }}"
+>
+
   <meta charset="utf-8">
 
   <meta
@@ -8,14 +28,32 @@
     content="width=device-width, initial-scale=1"
   >
 
-  <meta
-    name="description"
-    content="VidLoom Video Downloader — All Video Downloader for Free. Paste a public YouTube, TikTok, Instagram, Facebook, X/Twitter, Reddit, Vimeo, Twitch, Dailymotion, SoundCloud or Bilibili link and download the available MP4 video or MP3 audio for free."
-  >
+
+<title>SaveVido – Video & Audio Downloader | MP4, MP3 & 4K</title>
+
+<meta
+  name="description"
+  content="SaveVido helps you download compatible public videos and audio from YouTube, TikTok, Instagram, Facebook, X (Twitter), Reddit, Pinterest, Vimeo, Dailymotion and other supported websites. Choose available MP4 or audio formats and download in quality up to 4K where supported."
+>
+
+<meta
+  name="robots"
+  content="index, follow"
+>
 
   <meta
     name="theme-color"
     content="#6366f1"
+  >
+
+  <meta
+    name="application-name"
+    content="SaveVido"
+  >
+
+  <meta
+    name="apple-mobile-web-app-title"
+    content="SaveVido"
   >
 
   <meta
@@ -37,6 +75,48 @@
     name="google-adsense-account"
     content="ca-pub-2404211463113597"
   >
+
+  <meta
+    property="og:type"
+    content="website"
+  >
+
+  <meta
+    property="og:site_name"
+    content="SaveVido"
+  >
+
+  <meta
+    property="og:title"
+    content="SaveVido – Video & Audio Downloader"
+  >
+
+  <meta
+    property="og:description"
+    content="Download compatible public videos from YouTube, TikTok, Instagram, Facebook, X, Reddit, Pinterest, Vimeo and more with SaveVido. Choose available MP4 and audio formats and quality up to 4K where supported."
+>
+
+  <meta
+    name="twitter:card"
+    content="summary"
+  >
+
+  <meta
+    name="twitter:title"
+    content="SaveVido – Video & Audio Downloader"
+  >
+
+  <meta
+    name="twitter:description"
+    content="Save compatible public videos and audio in available formats and quality with SaveVido."
+  >
+
+  <!-- Add canonical URL after choosing the final website domain -->
+
+  <!-- Add Open Graph image after preparing the final SaveVido logo -->
+
+  <!-- Keep the existing stylesheet, icon and manifest links below -->
+```
 
   <!-- PWA Manifest -->
   <link
@@ -85,15 +165,14 @@
   {
     "@context": "https://schema.org",
     "@type": "WebSite",
-    "name": "VidLoom Video Downloader",
-    "alternateName": ["VidLoom Video Downloader", "All Video Downloader for Free", "VidLoom"],
-    "description": "VidLoom Video Downloader — All Video Downloader for Free. Paste a public video or audio link and download the available MP4 or MP3 file.",
-    "url": "https://avd.up.railway.app/"
+    "name": "SaveVido",
+    "alternateName": ["SaveVido", "All Video Downloader for Free", "VidLoom"],
+    "description": "SaveVido — All Video Downloader for Free. Paste a public video or audio link and download the available MP4 or MP3 file.",
+
   }
   </script>
 
-  <link rel="canonical" href="https://avd.up.railway.app/">
-  <title>VidLoom Video Downloader | All Video Downloader for Free</title>
+  <title>SaveVido | All Video Downloader for Free</title>
   <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-2404211463113597" crossorigin="anonymous"></script>
 </head>
 
@@ -108,16 +187,16 @@
     <a
       class="brand"
       href="#top"
-      aria-label="VidLoom Video Downloader home"
+      aria-label="SaveVido home"
     >
       <img
         class="brand-logo"
         src="{{ url_for('static', filename='logo.png') }}"
-        alt="VidLoom Video Downloader logo"
+        alt="SaveVido logo"
       >
 
       <span class="brand-text">
-        VidLoom VIDEO<br>
+        SaveVido VIDEO<br>
         <b>DOWNLOADER</b>
       </span>
     </a>
@@ -302,6 +381,85 @@
 
 
       <div class="tool-panel">
+
+<!-- SAVEVIDO SUPPORT NOTICE -->
+<div class="support-notice">
+
+  <details class="support-details">
+
+    <summary>
+      <span class="support-warning">NOTE:</span>
+      <span class="support-short">
+        If a download fails, restart SaveVido and try again.
+      </span>
+      <span class="support-more">More</span>
+    </summary>
+
+    <div class="support-content">
+
+      <p>
+        If you encounter an error or download problem, please follow
+        these steps:
+      </p>
+
+      <ol>
+        <li>Close SaveVido and open it again.</li>
+        <li>Try downloading the video again.</li>
+        <li>If the problem continues, connect to a VPN if appropriate
+            and try again.</li>
+        <li>If the issue is still not resolved, contact our support team.</li>
+      </ol>
+
+      <p>
+        When contacting us, please include:
+      </p>
+
+      <ul>
+        <li>The name of the website you are downloading from.</li>
+        <li>The error message or a description of the problem.</li>
+        <li>The video URL, if possible.</li>
+      </ul>
+
+      <p class="support-thanks">
+        We will review your report and consider adding support for
+        the website manually. Thank you for helping us improve SaveVido.
+      </p>
+
+      <div class="support-contact">
+
+        <a
+          class="support-contact-link whatsapp-link"
+          href="https://wa.me/92349557682?text=Hello%20SaveVido%20Support%2C%20I%20am%20experiencing%20a%20download%20issue.%0AWebsite%3A%20%0AError%3A%20%0AVideo%20URL%3A%20"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="Contact SaveVido on WhatsApp"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M12.04 2a9.87 9.87 0 0 0-8.47 14.94L2 22l5.21-1.52A9.93 9.93 0 1 0 12.04 2Zm0 18.12a8.17 8.17 0 0 1-4.16-1.14l-.3-.18-3.09.9.92-3.01-.2-.31a8.17 8.17 0 1 1 6.83 3.74Zm4.48-6.12c-.25-.13-1.47-.72-1.7-.8-.23-.09-.4-.13-.57.13-.17.25-.65.8-.8.96-.15.17-.3.19-.55.06-.25-.13-1.06-.39-2.02-1.24-.75-.67-1.25-1.5-1.4-1.75-.15-.25-.02-.39.11-.52.12-.11.25-.3.38-.44.13-.15.17-.25.25-.42.09-.17.05-.32-.02-.45-.06-.13-.57-1.37-.78-1.87-.2-.49-.41-.42-.57-.43h-.49c-.17 0-.45.06-.68.32-.23.25-.89.87-.89 2.12s.91 2.46 1.04 2.63c.13.17 1.79 2.73 4.33 3.83.61.26 1.09.42 1.47.54.62.2 1.18.17 1.63.1.5-.08 1.47-.6 1.68-1.19.21-.58.21-1.08.15-1.19-.07-.1-.24-.17-.49-.3Z"/>
+          </svg>
+          WhatsApp Support
+        </a>
+
+        <a
+          class="support-contact-link email-link"
+          href="mailto:azankokarai1122@gmail.com?subject=SaveVido%20Download%20Issue&body=Hello%20SaveVido%20Support%2C%0A%0AWebsite%3A%20%0AError%3A%20%0AVideo%20URL%3A%20%0A%0ADescription%3A%20"
+          aria-label="Email SaveVido support"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="currentColor" d="M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm9 7.1L20.3 7H3.7l8.3 5.1Zm0 2.3L3 8.8V17h18V8.8l-9 5.6Z"/>
+          </svg>
+          Email Support
+        </a>
+
+      </div>
+
+    </div>
+
+  </details>
+
+</div>
+<!-- END SAVEVIDO SUPPORT NOTICE -->
+
 
 
         <!-- URL -->
@@ -1258,7 +1416,7 @@
   <footer class="site-footer section-shell">
 
     <span>
-      VidLoom VIDEO DOWNLOADER
+      SaveVido
     </span>
 
     <span>

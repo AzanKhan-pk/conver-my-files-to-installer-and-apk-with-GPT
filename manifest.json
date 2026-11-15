@@ -1,7 +1,7 @@
 {
-  "name": "VidLoom Video Downloader",
-  "short_name": "VidLoom",
-  "description": "Download supported videos and audio with VidLoom.",
+  "name": "SaveVido",
+  "short_name": "SaveVido",
+  "description": "Download supported videos and audio with SaveVido.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#111827",
