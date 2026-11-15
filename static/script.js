@@ -274,19 +274,27 @@ fetchButton.addEventListener("click", async () => {
     const isImageCandidate = (() => {
       try {
         const parsed = new URL(url);
-          const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+        const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
         const path = parsed.pathname.toLowerCase();
+        const isHostOrSubdomain = (domain) =>
+          host === domain || host.endsWith("." + domain);
 
-        return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
-          || (host.endsWith("tiktok.com") && /\/photo\//i.test(path))
-          || (host === "pinterest.com" || host === "pin.it" || host.endsWith(".pinterest.com"))
-          || (host === "instagram.com" && /\/(p|tv|reel)\//i.test(path))
-          || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com")
-                || host === "fb.com" || host === "fb.watch")
-            && (/^\/share\/p\//.test(path) || /^\/photo\//.test(path) || /^\/photos\//.test(path))
-                  || /\/(photo|permalink)\.php$/i.test(path)))
-          || ((host === "x.com" || host === "twitter.com") && /\/status\//i.test(path))
-          || ((host === "reddit.com" || host === "redd.it") && /\/(comments|gallery)\//i.test(path));
+        const supportedImageSites = [
+          "tiktok.com",
+          "instagram.com",
+          "facebook.com",
+          "fb.com",
+          "fb.watch",
+          "pinterest.com",
+          "pin.it",
+          "x.com",
+          "twitter.com",
+          "reddit.com",
+          "redd.it"
+        ];
+
+        return /\\.(jpe?g|png|webp|gif|avif)$/i.test(path)
+          || supportedImageSites.some(isHostOrSubdomain);
       } catch (_) {
         return false;
       }
