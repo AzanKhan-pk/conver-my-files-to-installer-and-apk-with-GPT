@@ -713,7 +713,8 @@ def run_gallery_dl_urls(url):
     if Path(cookies_path).is_file():
         command.extend(["--cookies", cookies_path])
 
-    command.append(url)
+    urls = [url] if isinstance(url, str) else list(url)
+    command.extend(urls)
     try:
         result = subprocess.run(
             command,
@@ -763,10 +764,7 @@ def get_gallery_image_urls(url):
         photo_pages = facebook_photo_page_urls(url)
         if photo_pages:
             image_urls = []
-            for photo_page in photo_pages:
-                for image_url in run_gallery_dl_urls(photo_page):
-                    if image_url not in image_urls:
-                        image_urls.append(image_url)
+            image_urls = run_gallery_dl_urls(photo_pages)
             if image_urls:
                 return image_urls
 
@@ -1368,9 +1366,23 @@ def api_images_info():
         image_urls = get_gallery_image_urls(url)
 
         if not image_urls:
+            parsed = urlparse(url)
+            host = (parsed.hostname or "").lower().removeprefix("www.")
+            is_facebook = (
+                host == "facebook.com"
+                or host.endswith(".facebook.com")
+                or host == "fb.watch"
+            )
+            message = (
+                "Facebook did not expose any individual photo links. "
+                "The post may require login, may not be visible to your account, "
+                "or may contain no extractable photos. Only content you are authorized to view can be processed."
+                if is_facebook
+                else "No supported images found in this post."
+            )
             return jsonify({
                 "ok": False,
-                "error": "No supported images found in this post."
+                "error": message
             }), 400
 
         return jsonify({
