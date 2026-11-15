@@ -633,6 +633,26 @@
 
           <div class="advanced-grid">
 
+            <label class="session-option" style="grid-column:1 / -1">
+              <input
+                id="useBrowserSession"
+                type="checkbox"
+              >
+              <span>
+                <strong>Use my browser session (optional)</strong>
+                <small>For Instagram image posts in the local desktop app only. Uses your own signed-in browser profile on this device; it is never uploaded or bundled.</small>
+              </span>
+            </label>
+
+            <label id="browserChoiceWrap" hidden>
+              Browser for Instagram
+              <select id="browserChoice">
+                <option value="chrome">Google Chrome</option>
+                <option value="edge">Microsoft Edge</option>
+                <option value="firefox">Firefox</option>
+              </select>
+            </label>
+
             <label>
 
               Download location
