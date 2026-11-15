@@ -8,6 +8,7 @@ const resultBox = $("#result");
 let selectedMode = "video";
 let selectedQuality = "720p";
 let currentVideo = null;
+let currentImages = null;
 
 function setStatus(message, type = "") {
   statusBox.textContent = message;
@@ -45,6 +46,40 @@ function updateQualityLabel() {
     selectedQuality === "720p"
       ? "720p recommended"
       : selectedQuality;
+}
+
+function renderImageResult(images) {
+  currentImages = images;
+  currentVideo = null;
+
+  const thumbnails = images.map((image) => `
+    <figure class="image-gallery-item">
+      <img
+        src="${escapeHtml(image.url)}"
+        alt="Album image ${Number(image.id)}"
+        loading="lazy"
+      >
+      <figcaption>Image ${Number(image.id)}</figcaption>
+    </figure>
+  `).join("");
+
+  resultBox.innerHTML = `
+    <div class="image-gallery-result">
+      <div class="image-gallery-heading">
+        <div>
+          <h3>TikTok photo album</h3>
+          <p>${images.length} images found</p>
+        </div>
+        <span class="image-gallery-count">${images.length}</span>
+      </div>
+      <div class="image-gallery-grid">${thumbnails}</div>
+      <p class="image-gallery-note">
+        Preview only. Album downloading will be enabled after the download endpoint is added.
+      </p>
+    </div>
+  `;
+
+  resultBox.hidden = false;
 }
 
 function renderVideoResult(video) {
@@ -124,9 +159,24 @@ fetchButton.addEventListener("click", async () => {
   setStatus("Reading public media details...");
   resultBox.hidden = true;
   currentVideo = null;
+  currentImages = null;
 
   try {
-    const response = await fetch("/api/info", {
+    const isTikTokPhoto = (() => {
+      try {
+        const parsed = new URL(url);
+        return /(^|\\.)tiktok\\.com$/i.test(parsed.hostname)
+          && /\\/photo\\//i.test(parsed.pathname);
+      } catch (_) {
+        return false;
+      }
+    })();
+
+    const endpoint = isTikTokPhoto
+      ? "/api/images/info"
+      : "/api/info";
+
+    const response = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
@@ -142,13 +192,22 @@ fetchButton.addEventListener("click", async () => {
       );
     }
 
-    currentVideo = data.video;
-    renderVideoResult(currentVideo);
+    if (isTikTokPhoto) {
+      if (!Array.isArray(data.images) || data.images.length === 0) {
+        throw new Error("No images were found in this album.");
+      }
 
-    setStatus(
-      `${currentVideo.platform} media found.`,
-      "success"
-    );
+      renderImageResult(data.images);
+      setStatus(`TikTok photo album found: ${data.count || data.images.length} images.`, "success");
+    } else {
+      currentVideo = data.video;
+      renderVideoResult(currentVideo);
+
+      setStatus(
+        `${currentVideo.platform} media found.`,
+        "success"
+      );
+    }
   } catch (error) {
     resultBox.hidden = true;
     setStatus(
