@@ -1445,6 +1445,24 @@
 
   <!-- MAIN JAVASCRIPT -->
 
+  <button id="historyToggle" class="history-toggle" type="button" aria-controls="historyDrawer" aria-expanded="false">
+    <span aria-hidden="true">◷</span> History <span id="historyCount" class="history-count">0</span>
+  </button>
+
+  <aside id="historyDrawer" class="history-drawer" aria-label="Download history" aria-hidden="true">
+    <div class="history-drawer-head">
+      <div>
+        <p class="eyebrow">SAVEVIDO</p>
+        <h2>Download history</h2>
+      </div>
+      <button id="historyClose" class="history-close" type="button" aria-label="Close history">×</button>
+    </div>
+    <div id="historyList" class="history-list">
+      <p class="history-empty">Loading history…</p>
+    </div>
+  </aside>
+  <div id="historyBackdrop" class="history-backdrop" hidden></div>
+
   <script
     src="{{ url_for('static', filename='script.js') }}?v=20261115-5"
   ></script>
@@ -1555,23 +1573,7 @@
   </script>
 
 
-  <button id="historyToggle" class="history-toggle" type="button" aria-controls="historyDrawer" aria-expanded="false">
-    <span aria-hidden="true">◷</span> History <span id="historyCount" class="history-count">0</span>
-  </button>
 
-  <aside id="historyDrawer" class="history-drawer" aria-label="Download history" aria-hidden="true">
-    <div class="history-drawer-head">
-      <div>
-        <p class="eyebrow">SAVEVIDO</p>
-        <h2>Download history</h2>
-      </div>
-      <button id="historyClose" class="history-close" type="button" aria-label="Close history">×</button>
-    </div>
-    <div id="historyList" class="history-list">
-      <p class="history-empty">Loading history…</p>
-    </div>
-  </aside>
-  <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
 </body>
 </html>
