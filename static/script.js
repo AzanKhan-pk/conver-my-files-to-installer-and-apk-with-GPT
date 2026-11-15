@@ -372,10 +372,11 @@ fetchButton.addEventListener("click", async () => {
         }
       })();
 
-      if (socialPostKind && imageExtractionError) {
+      if (socialPostKind) {
+        const reason = imageExtractionError || "The image extractor did not return a usable gallery.";
         throw new Error(
-          socialPostKind + " image extraction: " + imageExtractionError +
-          " The post may require authorized access, or the platform may not expose its images to the extractor."
+          socialPostKind + " image extraction: " + reason +
+          " Video fallback was skipped to avoid a second slow request. The post may require authorized access, or the platform may not expose its images to the extractor."
         );
       }
 
