@@ -594,6 +594,14 @@ SAFE_IMAGE_SOURCE_HOSTS = {
     "twitch.tv", "soundcloud.com", "snd.sc",
     "bilibili.com", "b23.tv", "imgur.com",
     "postimg.cc", "postimages.org", "imageshack.com",
+    # Public image/CDN hosts used by the supported safe platforms
+    "i.pinimg.com", "images.pinimg.com", "fbcdn.net", "fbsbx.com",
+    "cdninstagram.com", "tiktokcdn.com", "tiktokv.com",
+    "byteoversea.com", "twimg.com", "redditmedia.com",
+    "ytimg.com", "vimeocdn.com", "dmcdn.net",
+    "ttvnw.net", "jtvnw.net", "twitchcdn.net", "sndcdn.com",
+    "hdslb.com", "cloudinary.com", "res.cloudinary.com",
+    "cloudfront.net", "fastly.net", "images.unsplash.com",
 }
 
 def validate_image_source_url(url):
