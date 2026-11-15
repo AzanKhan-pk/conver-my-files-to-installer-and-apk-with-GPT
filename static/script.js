@@ -176,7 +176,7 @@ async function downloadSelectedImages() {
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = "tiktok-photo-album.zip";
+    link.download = `${(currentImagePlatform || "social").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-images.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -276,17 +276,30 @@ fetchButton.addEventListener("click", async () => {
         const parsed = new URL(url);
         const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
         const path = parsed.pathname.toLowerCase();
+        const isHostOrSubdomain = (domain) =>
+          host === domain || host.endsWith("." + domain);
+
+        // Try gallery extraction on every safe, supported image-capable host.
+        // Video-only URLs simply fall back to the existing yt-dlp flow.
+        const supportedImageSites = [
+          "tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
+          "pinterest.com", "pin.it", "x.com", "twitter.com", "reddit.com", "redd.it",
+          "youtube.com", "youtube-nocookie.com", "youtu.be",
+          "vimeo.com", "dailymotion.com", "dai.ly",
+          "twitch.tv", "soundcloud.com", "snd.sc",
+          "bilibili.com", "b23.tv", "imgur.com",
+          "postimg.cc", "postimages.org", "imageshack.com",
+          "i.pinimg.com", "images.pinimg.com", "fbcdn.net", "fbsbx.com",
+          "cdninstagram.com", "tiktokcdn.com", "tiktokv.com",
+          "byteoversea.com", "twimg.com", "redditmedia.com",
+          "ytimg.com", "vimeocdn.com", "dmcdn.net",
+          "ttvnw.net", "jtvnw.net", "twitchcdn.net", "sndcdn.com",
+          "hdslb.com", "cloudinary.com", "cloudfront.net",
+          "images.unsplash.com"
+        ];
 
         return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
-          || (host.endsWith("tiktok.com") && /\/photo\//i.test(path))
-          || (host === "pinterest.com" || host === "pin.it" || host.endsWith(".pinterest.com"))
-          || (host === "instagram.com" && /\/(p|tv|reel)\//i.test(path))
-          || ((host === "facebook.com" || host === "m.facebook.com" || host.endsWith(".facebook.com")
-                || host === "fb.com" || host === "fb.watch")
-              && (/\/(photo|photos|posts|permalink|share)\//i.test(path)
-                  || /\/(photo|permalink)\.php$/i.test(path)))
-          || ((host === "x.com" || host === "twitter.com") && /\/status\//i.test(path))
-          || ((host === "reddit.com" || host === "redd.it") && /\/(comments|gallery)\//i.test(path));
+          || supportedImageSites.some(isHostOrSubdomain);
       } catch (_) {
         return false;
       }
@@ -323,6 +336,49 @@ fetchButton.addEventListener("click", async () => {
         "success"
       );
     } else {
+      const isFacebookPhotoPost = (() => {
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname.toLowerCase().replace(/^www\./, "");
+          const path = parsed.pathname.toLowerCase();
+          return (
+            (host === "facebook.com" || host.endsWith(".facebook.com") || host === "fb.com")
+            && (path.startsWith("/share/p/") || path.startsWith("/photo/") || path.startsWith("/photos/") || path.startsWith("/posts/"))
+          );
+        } catch (_) {
+          return false;
+        }
+      })();
+
+      // These post URL types are image-first. Do not invoke yt-dlp as a
+      // fallback when image extraction fails: it only adds another long
+      // network request and produces a misleading video-format error.
+      const socialPostKind = (() => {
+        try {
+          const parsed = new URL(url);
+          const host = parsed.hostname.toLowerCase();
+          const path = parsed.pathname.toLowerCase();
+          const isFacebook = host === "facebook.com" || host === "www.facebook.com"
+            || host.endsWith(".facebook.com") || host === "fb.com" || host === "fb.watch";
+          const isInstagram = host === "instagram.com" || host === "www.instagram.com";
+          if (isFacebook && (
+            path.startsWith("/share/p/") || path.startsWith("/photo/")
+            || path.startsWith("/photos/") || path.startsWith("/posts/")
+          )) return "Facebook";
+          if (isInstagram && path.startsWith("/p/")) return "Instagram";
+          return "";
+        } catch (_) {
+          return "";
+        }
+      })();
+
+      if (socialPostKind && imageExtractionError) {
+        throw new Error(
+          socialPostKind + " image extraction: " + imageExtractionError +
+          " The post may require authorized access, or the platform may not expose its images to the extractor."
+        );
+      }
+
       const response = await fetch("/api/info", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
