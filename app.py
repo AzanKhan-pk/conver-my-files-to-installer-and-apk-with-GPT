@@ -1322,6 +1322,17 @@ def run_download_job(job_id):
             )
 
 
+@app.get("/share")
+def android_pwa_share_target():
+    # Web Share Target support for Android-installed SaveVido PWA.
+    shared_url = (
+        request.args.get("url")
+        or request.args.get("text")
+        or ""
+    ).strip()
+    return render_template("index.html", shared_url=shared_url)
+
+
 @app.route("/")
 def index():
     with get_db() as connection:
