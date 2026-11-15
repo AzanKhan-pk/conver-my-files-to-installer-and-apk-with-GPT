@@ -288,7 +288,14 @@ fetchButton.addEventListener("click", async () => {
           "vimeo.com", "dailymotion.com", "dai.ly",
           "twitch.tv", "soundcloud.com", "snd.sc",
           "bilibili.com", "b23.tv", "imgur.com",
-          "postimg.cc", "postimages.org", "imageshack.com"
+          "postimg.cc", "postimages.org", "imageshack.com",
+          "i.pinimg.com", "images.pinimg.com", "fbcdn.net", "fbsbx.com",
+          "cdninstagram.com", "tiktokcdn.com", "tiktokv.com",
+          "byteoversea.com", "twimg.com", "redditmedia.com",
+          "ytimg.com", "vimeocdn.com", "dmcdn.net",
+          "ttvnw.net", "jtvnw.net", "twitchcdn.net", "sndcdn.com",
+          "hdslb.com", "cloudinary.com", "cloudfront.net",
+          "images.unsplash.com"
         ];
 
         return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
