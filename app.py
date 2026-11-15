@@ -5,6 +5,7 @@ import subprocess
 import sys
 import smtplib
 import sqlite3
+import json
 import tempfile
 import threading
 import uuid
@@ -30,8 +31,13 @@ from flask import (
 BASE_DIR = Path(__file__).resolve().parent
 DB_PATH = BASE_DIR / "analytics.db"
 
-DOWNLOAD_ROOT = Path(tempfile.gettempdir()) / "SaveVido_downloads"
+# Keep partial downloads outside the OS temp directory so they survive
+# reboots and Windows temporary-file cleanup.
+DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
+DOWNLOAD_ROOT = Path(os.getenv("SAVEVIDO_DOWNLOAD_DIR", str(DEFAULT_DOWNLOAD_ROOT))).expanduser()
 DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
+JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__)
 app.config["SECRET_KEY"] = os.getenv(
@@ -240,7 +246,16 @@ def init_db():
                 quality TEXT NOT NULL,
                 file_type TEXT NOT NULL,
                 source_url TEXT,
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                job_id TEXT,
+                file_path TEXT,
+                file_size INTEGER
+            );
+
+            CREATE TABLE IF NOT EXISTS download_jobs (
+                job_id TEXT PRIMARY KEY,
+                payload TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS comments (
@@ -1022,11 +1037,8 @@ def choose_video_format(info, requested_height):
 
 def new_download_job(url, mode, quality):
     job_id = uuid.uuid4().hex
-
-    temp_dir = Path(tempfile.mkdtemp(
-        prefix="SaveVido_",
-        dir=DOWNLOAD_ROOT
-    ))
+    temp_dir = JOBS_ROOT / job_id
+    temp_dir.mkdir(parents=True, exist_ok=True)
 
     job = {
         "id": job_id,
@@ -1052,64 +1064,68 @@ def new_download_job(url, mode, quality):
 
     with DOWNLOAD_JOBS_LOCK:
         DOWNLOAD_JOBS[job_id] = job
-
+    save_job_state(job)
     return job_id
 
 
 def get_job(job_id):
     with DOWNLOAD_JOBS_LOCK:
-        return DOWNLOAD_JOBS.get(job_id)
+        job = DOWNLOAD_JOBS.get(job_id)
+    if job:
+        return job
+
+    with get_db() as connection:
+        row = connection.execute(
+            "SELECT payload FROM download_jobs WHERE job_id = ?",
+            (job_id,),
+        ).fetchone()
+    if not row:
+        return None
+
+    try:
+        job = json.loads(row["payload"])
+    except (ValueError, TypeError):
+        return None
+
+    with DOWNLOAD_JOBS_LOCK:
+        DOWNLOAD_JOBS[job_id] = job
+    return job
 
 
 def update_job(job_id, **values):
     with DOWNLOAD_JOBS_LOCK:
         job = DOWNLOAD_JOBS.get(job_id)
-
         if job:
             job.update(values)
+            snapshot = dict(job)
+        else:
+            snapshot = None
+    if snapshot:
+        save_job_state(snapshot)
 
 
 def cleanup_job_files(job):
     if job and job.get("temp_dir"):
-        shutil.rmtree(
-            job["temp_dir"],
-            ignore_errors=True
-        )
+        shutil.rmtree(job["temp_dir"], ignore_errors=True)
 
 
 def progress_hook(job_id):
     def hook(data):
         job = get_job(job_id)
-
         if not job:
-            raise YtDlpStopSignal(
-                "Download job no longer exists."
-            )
+            raise YtDlpStopSignal("Download job no longer exists.")
 
-        if (
-            job.get("cancel_requested")
-            or job.get("pause_requested")
-        ):
-            raise YtDlpStopSignal(
-                "Download stopped by user."
-            )
+        if job.get("cancel_requested") or job.get("pause_requested"):
+            raise YtDlpStopSignal("Download stopped by user.")
 
         if data.get("status") == "downloading":
-            downloaded = int(
-                data.get("downloaded_bytes") or 0
-            )
-
+            downloaded = int(data.get("downloaded_bytes") or 0)
             total = int(
                 data.get("total_bytes")
                 or data.get("total_bytes_estimate")
                 or 0
             )
-
-            percent = (
-                downloaded / total * 100
-                if total else 0
-            )
-
+            percent = downloaded / total * 100 if total else 0
             update_job(
                 job_id,
                 status="downloading",
@@ -1119,7 +1135,6 @@ def progress_hook(job_id):
                 speed=float(data.get("speed") or 0),
                 eta=data.get("eta"),
             )
-
         elif data.get("status") == "finished":
             update_job(
                 job_id,
@@ -1128,50 +1143,31 @@ def progress_hook(job_id):
                 speed=0,
                 eta=0,
             )
-
     return hook
 
 
 def find_output_file(temp_dir, mode):
-    expected_ext = (
-        ".mp3" if mode == "audio" else ".mp4"
-    )
-
+    expected_ext = ".mp3" if mode == "audio" else ".mp4"
     candidates = [
-        path
-        for path in Path(temp_dir).glob("*")
+        path for path in Path(temp_dir).glob("*")
         if path.is_file()
         and path.suffix.lower() == expected_ext
         and not path.name.endswith(".part")
     ]
-
     if not candidates:
         raise RuntimeError(
-            f"No completed {expected_ext[1:].upper()} "
-            "file was produced. The source may not "
-            "provide this format."
+            f"No completed {expected_ext[1:].upper()} file was produced. "
+            "The source may not provide this format."
         )
 
-    final_path = max(
-        candidates,
-        key=lambda path: path.stat().st_size
-    )
-
+    final_path = max(candidates, key=lambda path: path.stat().st_size)
     if final_path.stat().st_size < MIN_VALID_FILE_BYTES:
-        raise RuntimeError(
-            "The downloaded file is empty or incomplete."
-        )
+        raise RuntimeError("The downloaded file is empty or incomplete.")
 
     with final_path.open("rb") as handle:
         header = handle.read(32).lstrip().lower()
-
-    if (
-        header.startswith(b"<!doctype")
-        or header.startswith(b"<html")
-    ):
-        raise RuntimeError(
-            "The source returned an HTML error page."
-        )
+    if header.startswith(b"<!doctype") or header.startswith(b"<html"):
+        raise RuntimeError("The source returned an HTML error page.")
 
     return final_path, final_path.stat().st_size
 
@@ -1187,8 +1183,10 @@ def run_download_job(job_id):
     quality = job["quality"]
 
     try:
-        update_job(job_id, status="preparing", error=None)
+        if not temp_dir.is_dir():
+            temp_dir.mkdir(parents=True, exist_ok=True)
 
+        update_job(job_id, status="preparing", error=None)
         info = get_media_info(url)
         title = info.get("title") or "video"
         update_job(job_id, title=title)
@@ -1197,14 +1195,13 @@ def run_download_job(job_id):
         options.update({
             "outtmpl": str(temp_dir / "%(id)s.%(ext)s"),
             "progress_hooks": [progress_hook(job_id)],
+            "continuedl": True,
+            "nopart": False,
         })
 
         if mode == "audio":
             if not FFMPEG_AVAILABLE:
-                raise RuntimeError(
-                    "MP3 conversion requires FFmpeg and ffprobe."
-                )
-
+                raise RuntimeError("MP3 conversion requires FFmpeg and ffprobe.")
             options["format"] = "bestaudio/best"
             options["postprocessors"] = [{
                 "key": "FFmpegExtractAudio",
@@ -1212,36 +1209,24 @@ def run_download_job(job_id):
                 "preferredquality": "192",
             }]
             file_type = "MP3"
-
         else:
             requested_height = QUALITY_HEIGHTS.get(quality, 720)
             selected_format, source_height = choose_video_format(
                 info, requested_height
             )
-
             app.logger.info(
-                "Quality=%s, selected height=%s",
-                quality, source_height
+                "Quality=%s, selected height=%s", quality, source_height
             )
-
             options["format"] = selected_format
-
             if FFMPEG_AVAILABLE:
                 options["merge_output_format"] = "mp4"
-
             file_type = "MP4"
 
         update_job(job_id, status="downloading")
-
         with yt_dlp.YoutubeDL(options) as ydl:
-            downloaded_info = ydl.extract_info(
-                url, download=True
-            )
+            downloaded_info = ydl.extract_info(url, download=True)
 
-        final_path, final_size = find_output_file(
-            temp_dir, mode
-        )
-
+        final_path, final_size = find_output_file(temp_dir, mode)
         title = downloaded_info.get("title") or title
         platform = platform_for(url)
 
@@ -1249,13 +1234,13 @@ def run_download_job(job_id):
             connection.execute(
                 """
                 INSERT INTO downloads
-                (title, platform, quality, file_type,
-                 source_url, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                (title, platform, quality, file_type, source_url, created_at,
+                 job_id, file_path, file_size)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    title, platform, quality, file_type,
-                    url, now_iso()
+                    title, platform, quality, file_type, url, now_iso(),
+                    job_id, str(final_path), final_size,
                 ),
             )
 
@@ -1272,12 +1257,12 @@ def run_download_job(job_id):
             title=title,
             platform=platform,
             file_type=file_type,
+            file_size=final_size,
         )
 
     except Exception as error:
         if find_stop_signal(error):
             current_job = get_job(job_id) or {}
-
             if current_job.get("cancel_requested"):
                 update_job(
                     job_id,
@@ -1290,143 +1275,24 @@ def run_download_job(job_id):
                     job_id,
                     status="paused",
                     pause_requested=False,
+                    speed=0,
                 )
             return
 
         app.logger.exception("Download job failed")
-
         if is_network_error(error):
             update_job(
                 job_id,
                 status="network_error",
-                error=(
-                    "Network error. Check your connection "
-                    "and try resuming."
-                ),
+                error="Network error. Check your connection and try resuming.",
+                speed=0,
             )
         else:
             update_job(
                 job_id,
                 status="error",
                 error=humanize_error(error),
-            )
-
-        options = base_ydl_options()
-        options.update({
-            "outtmpl": str(temp_dir / "%(id)s.%(ext)s"),
-            "progress_hooks": [progress_hook(job_id)],
-        })
-
-        if mode == "audio":
-            if not FFMPEG_AVAILABLE:
-                raise RuntimeError(
-                    "MP3 conversion requires FFmpeg and ffprobe."
-                )
-
-            options["format"] = "bestaudio/best"
-            options["postprocessors"] = [{
-                "key": "FFmpegExtractAudio",
-                "preferredcodec": "mp3",
-                "preferredquality": "192",
-            }]
-            file_type = "MP3"
-
-        else:
-            requested_height = QUALITY_HEIGHTS[quality]
-            selected_format, source_height = choose_video_format(
-                info, requested_height
-            )
-
-            app.logger.info(
-                "Quality=%s, selected height=%s",
-                quality, source_height
-            )
-
-            options["format"] = selected_format
-
-            if FFMPEG_AVAILABLE:
-                options["merge_output_format"] = "mp4"
-
-            file_type = "MP4"
-
-        update_job(job_id, status="downloading")
-
-        with yt_dlp.YoutubeDL(options) as ydl:
-            downloaded_info = ydl.extract_info(
-                url, download=True
-            )
-
-        final_path, final_size = find_output_file(
-            temp_dir, mode
-        )
-
-        title = downloaded_info.get("title") or title
-        platform = platform_for(url)
-
-        with get_db() as connection:
-            connection.execute(
-                """
-                INSERT INTO downloads
-                (title, platform, quality, file_type,
-                 source_url, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    title, platform, quality, file_type,
-                    url, now_iso()
-                ),
-            )
-
-        update_job(
-            job_id,
-            status="completed",
-            downloaded_bytes=final_size,
-            total_bytes=final_size,
-            percent=100,
-            speed=0,
-            eta=0,
-            file_path=str(final_path),
-            filename=final_path.name,
-            title=title,
-            platform=platform,
-            file_type=file_type,
-        )
-
-    except Exception as error:
-        if find_stop_signal(error):
-            current_job = get_job(job_id) or {}
-
-            if current_job.get("cancel_requested"):
-                update_job(
-                    job_id,
-                    status="cancelled",
-                    cancel_requested=False,
-                )
-                cleanup_job_files(current_job)
-            else:
-                update_job(
-                    job_id,
-                    status="paused",
-                    pause_requested=False,
-                )
-            return
-
-        app.logger.exception("Download job failed")
-
-        if is_network_error(error):
-            update_job(
-                job_id,
-                status="network_error",
-                error=(
-                    "Network error. Check your connection "
-                    "and try resuming."
-                ),
-            )
-        else:
-            update_job(
-                job_id,
-                status="error",
-                error=humanize_error(error),
+                speed=0,
             )
 
 
@@ -1808,6 +1674,12 @@ def download_status(job_id):
             "eta": job.get("eta"),
             "error": job.get("error"),
             "title": job.get("title"),
+            "filename": job.get("filename"),
+            "file_size": job.get("file_size", 0),
+            "file_path": job.get("file_path"),
+            "platform": job.get("platform"),
+            "quality": job.get("quality"),
+            "file_type": job.get("file_type"),
         },
     })
 
@@ -1896,12 +1768,11 @@ def download_file(job_id):
         }), 409
 
     path = Path(job.get("file_path") or "")
+    job_dir = Path(job.get("temp_dir") or "").resolve()
 
     if (
         not path.is_file()
-        or not path.resolve().is_relative_to(
-            Path(job["temp_dir"]).resolve()
-        )
+        or not path.resolve().is_relative_to(job_dir)
     ):
         return jsonify({
             "ok": False,
@@ -2041,6 +1912,7 @@ def terms():
     
 
 init_db()
+restore_download_jobs()
 
 if not FFMPEG_AVAILABLE:
     app.logger.warning(
