@@ -204,6 +204,11 @@ def init_db():
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS app_settings (
+                setting_key TEXT PRIMARY KEY,
+                setting_value TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -228,6 +233,25 @@ def init_db():
                 connection.execute(
                     f"ALTER TABLE downloads ADD COLUMN {column} {definition}"
                 )
+
+
+def load_download_location():
+    """Restore the user's chosen download folder from local app settings."""
+    global DOWNLOAD_ROOT, JOBS_ROOT
+    with get_db() as connection:
+        row = connection.execute(
+            "SELECT setting_value FROM app_settings WHERE setting_key = ?",
+            ("download_root",),
+        ).fetchone()
+    if row:
+        candidate = Path(row["setting_value"]).expanduser()
+        try:
+            candidate.mkdir(parents=True, exist_ok=True)
+            DOWNLOAD_ROOT = candidate.resolve()
+            JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
+            JOBS_ROOT.mkdir(parents=True, exist_ok=True)
+        except OSError:
+            app.logger.exception("Could not restore SaveVido download folder")
 
 
 def save_job_state(job):
@@ -1799,6 +1823,61 @@ def download_file(job_id):
     )
 
 
+@app.get("/api/download-location")
+def get_download_location():
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        return jsonify({"ok": False, "error": "Available only in the local desktop app."}), 403
+    return jsonify({"ok": True, "path": str(DOWNLOAD_ROOT)})
+
+
+@app.post("/api/browse-location")
+def browse_download_location():
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        return jsonify({"ok": False, "error": "Available only in the local desktop app."}), 403
+
+    try:
+        import tkinter as tk
+        from tkinter import filedialog
+
+        root = tk.Tk()
+        root.withdraw()
+        root.attributes("-topmost", True)
+        selected = filedialog.askdirectory(
+            title="Choose SaveVido download folder",
+            initialdir=str(DOWNLOAD_ROOT),
+            mustexist=True,
+        )
+        root.destroy()
+
+        if not selected:
+            return jsonify({"ok": True, "cancelled": True, "path": str(DOWNLOAD_ROOT)})
+
+        selected_path = Path(selected).expanduser().resolve()
+        selected_path.mkdir(parents=True, exist_ok=True)
+
+        with get_db() as connection:
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO app_settings(setting_key, setting_value)
+                VALUES (?, ?)
+                """,
+                ("download_root", str(selected_path)),
+            )
+
+        global DOWNLOAD_ROOT, JOBS_ROOT
+        DOWNLOAD_ROOT = selected_path
+        JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
+        JOBS_ROOT.mkdir(parents=True, exist_ok=True)
+        return jsonify({"ok": True, "path": str(DOWNLOAD_ROOT)})
+
+    except Exception as error:
+        app.logger.warning("Could not choose download folder: %s", error)
+        return jsonify({
+            "ok": False,
+            "error": "Could not open the folder picker. Use the local Windows desktop app.",
+        }), 500
+
+
 @app.get("/api/history")
 def api_download_history():
     with get_db() as connection:
@@ -1857,8 +1936,7 @@ def open_download_folder(job_id):
         return jsonify({"ok": False, "error": "Download job not found."}), 404
 
     folder = Path(job.get("temp_dir") or "").resolve()
-    allowed_root = JOBS_ROOT.resolve()
-    if not folder.is_relative_to(allowed_root) or not folder.is_dir():
+    if folder.name != job_id or folder.parent.name != ".jobs" or not folder.is_dir():
         return jsonify({"ok": False, "error": "Download folder is not available."}), 404
 
     try:
@@ -1990,6 +2068,7 @@ def terms():
     
 
 init_db()
+load_download_location()
 restore_download_jobs()
 
 if not FFMPEG_AVAILABLE:
