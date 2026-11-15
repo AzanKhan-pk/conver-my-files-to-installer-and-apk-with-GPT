@@ -585,47 +585,120 @@ IMAGE_EXTENSIONS = {
 }
 
 
+def facebook_request_session():
+    """Create a requests session using only an optional user-provided cookie file."""
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/124.0.0.0 Safari/537.36"
+        )
+    })
+
+    cookies_path = os.getenv(
+        "COOKIES_FILE",
+        str(BASE_DIR / "cookies.txt")
+    )
+    if Path(cookies_path).is_file():
+        try:
+            from http.cookiejar import MozillaCookieJar
+            cookie_jar = MozillaCookieJar(cookies_path)
+            cookie_jar.load(ignore_discard=True, ignore_expires=True)
+            session.cookies.update(cookie_jar)
+        except Exception as error:
+            app.logger.warning("Could not load optional Facebook cookies: %s", error)
+
+    return session
+
+
 def normalize_gallery_url(url):
-    """Resolve supported short image links to stable canonical post URLs."""
+    """Resolve supported short links without following redirects off-site."""
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower().removeprefix("www.")
 
-    if host in {"pin.it"}:
+    if host in {"pin.it", "facebook.com", "m.facebook.com", "fb.watch"}:
         try:
-            response = requests.get(
+            response = facebook_request_session().get(
                 url,
-                headers={"User-Agent": "Mozilla/5.0"},
                 allow_redirects=True,
                 timeout=(10, 25),
             )
-            final_url = response.url
-            final = urlparse(final_url)
+            final = urlparse(response.url)
             final_host = (final.hostname or "").lower().removeprefix("www.")
-
-            # Only accept redirects that remain on Pinterest.
-            if final.scheme not in {"http", "https"} or final_host not in {
-                "pinterest.com", "m.pinterest.com"
-            }:
-                app.logger.warning("Pinterest short link redirected outside Pinterest")
-                return url
-
-            match = re.search(r"/pin/(\d+)", final.path)
-            if match:
-                return f"https://www.pinterest.com/pin/{match.group(1)}/"
+            allowed_redirect = (
+                final_host in {"pinterest.com", "m.pinterest.com"}
+                if host == "pin.it"
+                else (
+                    final_host == "facebook.com"
+                    or final_host.endswith(".facebook.com")
+                    or final_host == "fb.watch"
+                )
+            )
+            if (
+                final.scheme in {"http", "https"}
+                and allowed_redirect
+            ):
+                if host == "pin.it":
+                    match = re.search(r"/pin/(\\d+)", final.path)
+                    if match:
+                        return f"https://www.pinterest.com/pin/{match.group(1)}/"
+                return response.url
         except requests.RequestException as error:
-            app.logger.warning("Could not resolve Pinterest short link: %s", error)
+            app.logger.warning("Could not resolve %s short link: %s", host, error)
 
-    # Pinterest sometimes redirects a valid pin to a /sent/ tracking URL.
+    # Remove Pinterest tracking suffixes while preserving the numeric pin ID.
     if host in {"pinterest.com", "m.pinterest.com"}:
-        match = re.search(r"/pin/(\d+)", parsed.path)
+        match = re.search(r"/pin/(\\d+)", parsed.path)
         if match:
             return f"https://www.pinterest.com/pin/{match.group(1)}/"
 
     return url
 
 
-def get_gallery_image_urls(url):
-    url = normalize_gallery_url(url)
+def facebook_photo_page_urls(url):
+    """Find individual photo URLs embedded in an accessible Facebook post page."""
+    try:
+        response = facebook_request_session().get(
+            url,
+            allow_redirects=True,
+            timeout=(10, 25),
+        )
+    except requests.RequestException as error:
+        app.logger.warning("Could not read Facebook post page: %s", error)
+        return []
+
+    final = urlparse(response.url)
+    final_host = (final.hostname or "").lower().removeprefix("www.")
+    if not (
+        final_host == "facebook.com"
+        or final_host.endswith(".facebook.com")
+    ):
+        return []
+
+    if "/login" in final.path.lower() or response.status_code >= 400:
+        app.logger.info("Facebook post is not publicly accessible to the image extractor")
+        return []
+
+    page = response.text or ""
+    photo_ids = []
+    patterns = (
+        r'(?:photo(?:\\/|/)(?:\\?)?[^"\\']*?fbid=)(\\d{6,})',
+        r'["\\']fbid["\\']\\s*:\\s*["\\']?(\\d{6,})',
+        r'[?&]fbid=(\\d{6,})',
+    )
+    for pattern in patterns:
+        for photo_id in re.findall(pattern, page, flags=re.IGNORECASE):
+            if photo_id not in photo_ids:
+                photo_ids.append(photo_id)
+
+    return [
+        f"https://www.facebook.com/photo/?fbid={photo_id}"
+        for photo_id in photo_ids[:50]
+    ]
+
+
+def run_gallery_dl_urls(url):
     command = [
         sys.executable,
         "-m",
@@ -633,8 +706,6 @@ def get_gallery_image_urls(url):
         "--get-urls",
     ]
 
-    # Reuse the same optional cookies.txt file used by the downloader.
-    # Never log or return cookie contents.
     cookies_path = os.getenv(
         "COOKIES_FILE",
         str(BASE_DIR / "cookies.txt")
@@ -643,7 +714,6 @@ def get_gallery_image_urls(url):
         command.extend(["--cookies", cookies_path])
 
     command.append(url)
-
     try:
         result = subprocess.run(
             command,
@@ -652,15 +722,11 @@ def get_gallery_image_urls(url):
             timeout=120,
             check=False,
         )
-    except subprocess.TimeoutExpired:
-        app.logger.warning("gallery-dl timed out while extracting %s", platform_for(url))
-        return []
-    except OSError as error:
-        app.logger.warning("Could not start gallery-dl: %s", error)
+    except (subprocess.TimeoutExpired, OSError) as error:
+        app.logger.warning("gallery-dl could not process %s: %s", platform_for(url), error)
         return []
 
     if result.returncode != 0:
-        # Keep the detailed extractor error in the local server log only.
         app.logger.warning(
             "gallery-dl extraction failed for %s (exit %s): %s",
             platform_for(url),
@@ -673,12 +739,38 @@ def get_gallery_image_urls(url):
         media_url = line.strip()
         if not media_url.startswith(("https://", "http://")):
             continue
-
         extension = Path(urlparse(media_url).path).suffix.lower()
         if extension in IMAGE_EXTENSIONS and media_url not in image_urls:
             image_urls.append(media_url)
-
     return image_urls
+
+
+def get_gallery_image_urls(url):
+    url = normalize_gallery_url(url)
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    is_facebook = (
+        host == "facebook.com"
+        or host.endswith(".facebook.com")
+        or host == "fb.watch"
+    )
+
+    # gallery-dl has individual-photo extractors, but Facebook post/share
+    # pages are not a supported post extractor. Discover photo IDs on a
+    # page the current user is already authorized to view, then use the
+    # supported individual-photo extractor for each one.
+    if is_facebook:
+        photo_pages = facebook_photo_page_urls(url)
+        if photo_pages:
+            image_urls = []
+            for photo_page in photo_pages:
+                for image_url in run_gallery_dl_urls(photo_page):
+                    if image_url not in image_urls:
+                        image_urls.append(image_url)
+            if image_urls:
+                return image_urls
+
+    return run_gallery_dl_urls(url)
 
 def get_media_info(url):
     return extract_info_with_retry(url, download=False)
