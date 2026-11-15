@@ -1068,6 +1068,7 @@ def new_download_job(url, mode, quality):
 
     job = {
         "id": job_id,
+        "created_at": now_iso(),
         "url": url,
         "mode": mode,
         "quality": quality,
@@ -1901,27 +1902,61 @@ def api_download_history():
             LIMIT 100
             """
         ).fetchall()
+        job_rows = connection.execute(
+            "SELECT payload, updated_at FROM download_jobs ORDER BY updated_at DESC"
+        ).fetchall()
 
-    return jsonify({
-        "ok": True,
-        "items": [
-            {
-                "id": row["id"],
-                "title": row["title"],
-                "platform": row["platform"],
-                "quality": row["quality"],
-                "file_type": row["file_type"],
-                "job_id": row["job_id"],
-                "file_path": row["file_path"],
-                "file_size": row["file_size"] or 0,
-                "created_at": row["created_at"],
-                "file_exists": bool(
-                    row["file_path"] and Path(row["file_path"]).is_file()
-                ),
-            }
-            for row in rows
-        ],
-    })
+    items = [
+        {
+            "id": row["id"],
+            "title": row["title"],
+            "platform": row["platform"],
+            "quality": row["quality"],
+            "file_type": row["file_type"],
+            "job_id": row["job_id"],
+            "file_path": row["file_path"],
+            "file_size": row["file_size"] or 0,
+            "created_at": row["created_at"],
+            "status": "completed",
+            "file_exists": bool(
+                row["file_path"] and Path(row["file_path"]).is_file()
+            ),
+        }
+        for row in rows
+    ]
+
+    resumable_states = {
+        "paused", "network_error", "starting", "preparing",
+        "downloading", "processing",
+    }
+    for job_row in job_rows:
+        try:
+            job = json.loads(job_row["payload"])
+        except (ValueError, TypeError):
+            continue
+        if job.get("status") not in resumable_states:
+            continue
+        job_path = Path(job.get("file_path") or "")
+        items.append({
+            "id": None,
+            "title": job.get("title") or "Download in progress",
+            "platform": job.get("platform") or "",
+            "quality": job.get("quality") or "",
+            "file_type": job.get("file_type") or "",
+            "job_id": job.get("id"),
+            "file_path": job.get("file_path"),
+            "file_size": job.get("file_size") or job.get("downloaded_bytes") or 0,
+            "created_at": job.get("created_at") or job_row["updated_at"],
+            "status": job.get("status"),
+            "percent": job.get("percent") or 0,
+            "downloaded_bytes": job.get("downloaded_bytes") or 0,
+            "total_bytes": job.get("total_bytes") or 0,
+            "error": job.get("error"),
+            "file_exists": bool(job_path.is_file()),
+        })
+
+    items.sort(key=lambda item: item.get("created_at") or "", reverse=True)
+    return jsonify({"ok": True, "items": items[:100]})
 
 
 @app.delete("/api/history/<int:history_id>")
