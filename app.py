@@ -640,7 +640,7 @@ def normalize_gallery_url(url):
                 and allowed_redirect
             ):
                 if host == "pin.it":
-                    match = re.search(r"/pin/(\\d+)", final.path)
+                    match = re.search(r"/pin/(\d+)", final.path)
                     if match:
                         return f"https://www.pinterest.com/pin/{match.group(1)}/"
                 return response.url
@@ -649,7 +649,7 @@ def normalize_gallery_url(url):
 
     # Remove Pinterest tracking suffixes while preserving the numeric pin ID.
     if host in {"pinterest.com", "m.pinterest.com"}:
-        match = re.search(r"/pin/(\\d+)", parsed.path)
+        match = re.search(r"/pin/(\d+)", parsed.path)
         if match:
             return f"https://www.pinterest.com/pin/{match.group(1)}/"
 
