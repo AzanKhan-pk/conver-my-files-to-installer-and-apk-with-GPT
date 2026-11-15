@@ -4,12 +4,32 @@ const urlInput = $("#url");
 const fetchButton = $("#fetchBtn");
 const statusBox = $("#status");
 const resultBox = $("#result");
+const useBrowserSession = $("#useBrowserSession");
+const browserChoice = $("#browserChoice");
+const browserChoiceWrap = $("#browserChoiceWrap");
 
 let selectedMode = "video";
 let selectedQuality = "720p";
 let currentVideo = null;
 let currentImages = null;
 let currentImagePlatform = "";
+
+function getImageSessionOptions() {
+  return {
+    use_browser_session: Boolean(useBrowserSession?.checked),
+    browser: browserChoice?.value || "chrome"
+  };
+}
+
+useBrowserSession?.addEventListener("change", () => {
+  if (browserChoiceWrap) browserChoiceWrap.hidden = !useBrowserSession.checked;
+  if (useBrowserSession.checked) {
+    setStatus(
+      "Your selected browser profile will be read locally by this desktop app only. Do not enable this on a shared computer.",
+      "success"
+    );
+  }
+});
 
 function setStatus(message, type = "") {
   statusBox.textContent = message;
@@ -157,7 +177,8 @@ async function downloadSelectedImages() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         url: urlInput.value.trim(),
-        image_ids: selectedIds
+        image_ids: selectedIds,
+        ...getImageSessionOptions()
       })
     });
 
@@ -313,7 +334,7 @@ fetchButton.addEventListener("click", async () => {
         const imageResponse = await fetch("/api/images/info", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ url })
+          body: JSON.stringify({ url, ...getImageSessionOptions() })
         });
         const candidate = await imageResponse.json();
 
