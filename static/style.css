@@ -560,3 +560,40 @@ select option{background:var(--surface);color:var(--ink)}
 
 /* Generic social image gallery label */
 .image-gallery-result h3 { overflow-wrap: anywhere; }
+
+
+/* Consistent full-image previews across every supported image gallery.
+   Keep the whole image visible inside a fixed thumbnail tile; never crop. */
+.image-gallery-grid {
+  grid-template-columns: repeat(auto-fill, minmax(112px, 132px));
+  justify-content: start;
+  align-items: start;
+  gap: 10px;
+}
+.image-gallery-item {
+  width: 100%;
+  min-height: 0;
+  aspect-ratio: auto;
+}
+.image-gallery-item img {
+  display: block !important;
+  width: 100% !important;
+  height: 132px !important;
+  min-height: 132px;
+  max-height: 132px;
+  aspect-ratio: 1 / 1;
+  object-fit: contain !important;
+  object-position: center center !important;
+  background: var(--void);
+}
+@media (max-width: 460px) {
+  .image-gallery-grid {
+    grid-template-columns: repeat(auto-fill, minmax(100px, 120px));
+    gap: 8px;
+  }
+  .image-gallery-item img {
+    height: 120px !important;
+    min-height: 120px;
+    max-height: 120px;
+  }
+}
