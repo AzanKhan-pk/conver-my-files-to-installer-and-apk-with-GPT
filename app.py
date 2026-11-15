@@ -1799,6 +1799,82 @@ def download_file(job_id):
     )
 
 
+@app.get("/api/history")
+def api_download_history():
+    with get_db() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, title, platform, quality, file_type, job_id,
+                   file_path, file_size, created_at
+            FROM downloads
+            ORDER BY id DESC
+            LIMIT 100
+            """
+        ).fetchall()
+
+    return jsonify({
+        "ok": True,
+        "items": [
+            {
+                "id": row["id"],
+                "title": row["title"],
+                "platform": row["platform"],
+                "quality": row["quality"],
+                "file_type": row["file_type"],
+                "job_id": row["job_id"],
+                "file_path": row["file_path"],
+                "file_size": row["file_size"] or 0,
+                "created_at": row["created_at"],
+                "file_exists": bool(
+                    row["file_path"] and Path(row["file_path"]).is_file()
+                ),
+            }
+            for row in rows
+        ],
+    })
+
+
+@app.delete("/api/history/<int:history_id>")
+def delete_download_history_item(history_id):
+    # This removes only the history row. The downloaded file is untouched.
+    with get_db() as connection:
+        cursor = connection.execute(
+            "DELETE FROM downloads WHERE id = ?",
+            (history_id,),
+        )
+    if cursor.rowcount == 0:
+        return jsonify({"ok": False, "error": "History item not found."}), 404
+    return jsonify({"ok": True})
+
+
+@app.post("/api/download/<job_id>/open-folder")
+def open_download_folder(job_id):
+    if request.remote_addr not in {"127.0.0.1", "::1"}:
+        return jsonify({"ok": False, "error": "Folder access is available only in the local desktop app."}), 403
+
+    job = get_job(job_id)
+    if not job:
+        return jsonify({"ok": False, "error": "Download job not found."}), 404
+
+    folder = Path(job.get("temp_dir") or "").resolve()
+    allowed_root = JOBS_ROOT.resolve()
+    if not folder.is_relative_to(allowed_root) or not folder.is_dir():
+        return jsonify({"ok": False, "error": "Download folder is not available."}), 404
+
+    try:
+        if os.name == "nt":
+            os.startfile(str(folder))
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", str(folder)])
+        else:
+            subprocess.Popen(["xdg-open", str(folder)])
+    except Exception as error:
+        app.logger.warning("Could not open download folder: %s", error)
+        return jsonify({"ok": False, "error": "Could not open the download folder."}), 500
+
+    return jsonify({"ok": True})
+
+
 @app.post("/api/comments")
 def api_comments():
     payload = request.get_json(silent=True) or {}
