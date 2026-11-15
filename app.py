@@ -755,7 +755,7 @@ def facebook_page_image_urls(url):
     page = unescape(page)
 
     image_urls = []
-    pattern = re.compile(r"https?://[^\\s\\"'<>\\\\]+", re.IGNORECASE)
+    pattern = re.compile(r"""https?://[^\s"'<>\\]+""", re.IGNORECASE)
     for candidate in pattern.findall(page):
         candidate = candidate.rstrip("),;]")
         if _is_platform_image_url(candidate, "Facebook"):
@@ -798,9 +798,9 @@ def facebook_photo_page_urls(url):
     page = (response.text or "").replace("\\/", "/")
     photo_ids = []
     patterns = (
-        r"/photo/\\?[^\\"']*fbid=(\\d{6,})",
-        r"\\"fbid\\"\\s*:\\s*\\"?(\\d{6,})",
-        r"[?&]fbid=(\\d{6,})",
+        r'/photo/\?[^"']*fbid=(\d{6,})',
+        r'"fbid"\s*:\s*"?(\d{6,})',
+        r"[?&]fbid=(\d{6,})",
     )
     for pattern in patterns:
         for photo_id in re.findall(pattern, page, flags=re.IGNORECASE):
