@@ -176,7 +176,7 @@ async function downloadSelectedImages() {
     const objectUrl = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = objectUrl;
-    link.download = "tiktok-photo-album.zip";
+    link.download = `${(currentImagePlatform || "social").toLowerCase().replace(/[^a-z0-9]+/g, "-")}-images.zip`;
     document.body.appendChild(link);
     link.click();
     link.remove();
@@ -279,15 +279,16 @@ fetchButton.addEventListener("click", async () => {
         const isHostOrSubdomain = (domain) =>
           host === domain || host.endsWith("." + domain);
 
-        // Image-capable checks are attempted only on supported, non-adult
-        // content platforms. The extractor decides whether a page has images.
+        // Try gallery extraction on every safe, supported image-capable host.
+        // Video-only URLs simply fall back to the existing yt-dlp flow.
         const supportedImageSites = [
           "tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
           "pinterest.com", "pin.it", "x.com", "twitter.com", "reddit.com", "redd.it",
           "youtube.com", "youtube-nocookie.com", "youtu.be",
           "vimeo.com", "dailymotion.com", "dai.ly",
           "twitch.tv", "soundcloud.com", "snd.sc",
-          "bilibili.com", "b23.tv", "darkero.co", "darkero.com", "baddielatina.com"
+          "bilibili.com", "b23.tv", "imgur.com",
+          "postimg.cc", "postimages.org", "imageshack.com"
         ];
 
         return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
