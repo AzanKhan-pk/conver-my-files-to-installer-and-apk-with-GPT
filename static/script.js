@@ -350,32 +350,32 @@ fetchButton.addEventListener("click", async () => {
         }
       })();
 
-      if (isFacebookPhotoPost && imageExtractionError) {
-        throw new Error(
-          "Facebook image extraction: " + imageExtractionError +
-          " Facebook post pages may require an authorized login, and only photos visible to your account can be read."
-        );
-      }
-
-      // Instagram /p/ links are photo or carousel posts. If the gallery
-      // extractor cannot read them, do not send them to the video extractor:
-      // that creates a misleading "No suitable media format" error.
-      const isInstagramPhotoPost = (() => {
+      // These post URL types are image-first. Do not invoke yt-dlp as a
+      // fallback when image extraction fails: it only adds another long
+      // network request and produces a misleading video-format error.
+      const socialPostKind = (() => {
         try {
           const parsed = new URL(url);
-          const host = parsed.hostname.toLowerCase();
+          const host = parsed.hostname.toLowerCase().replace(/^www\\./, "");
           const path = parsed.pathname.toLowerCase();
-          return (host === "instagram.com" || host === "www.instagram.com")
-            && path.startsWith("/p/");
+          const isFacebook = host === "facebook.com" || host.endsWith(".facebook.com")
+            || host === "fb.com" || host === "fb.watch";
+          const isInstagram = host === "instagram.com";
+          if (isFacebook && (
+            path.startsWith("/share/p/") || path.startsWith("/photo/")
+            || path.startsWith("/photos/") || path.startsWith("/posts/")
+          )) return "Facebook";
+          if (isInstagram && path.startsWith("/p/")) return "Instagram";
+          return "";
         } catch (_) {
-          return false;
+          return "";
         }
       })();
 
-      if (isInstagramPhotoPost && imageExtractionError) {
+      if (socialPostKind && imageExtractionError) {
         throw new Error(
-          "Instagram image extraction: " + imageExtractionError +
-          " This post may require authorized access or may not expose its images to the extractor."
+          socialPostKind + " image extraction: " + imageExtractionError +
+          " The post may require authorized access, or the platform may not expose its images to the extractor."
         );
       }
 
