@@ -126,16 +126,6 @@ ALLOWED_HOSTS = {
     "i.pinimg.com", "images.pinimg.com",
     "v.pinimg.com",
 
-    # Darkero
-    "darkero.co", "www.darkero.co",
-    "darkero.com", "www.darkero.com",
-    "files.darkero.com",
-
-    # Baddielatina
-    "baddielatina.com",
-    "www.baddielatina.com",
-    "files.baddielatina.com",
-
     # Image hosting
     "imgur.com", "i.imgur.com",
     "imagebam.com", "imageshack.com",
@@ -367,13 +357,7 @@ def clean_url(value):
 
     bare_host = host.removeprefix("www.")
 
-    # Allow Baddielatina and its subdomains
-    is_baddielatina = (
-        bare_host == "baddielatina.com"
-        or bare_host.endswith(".baddielatina.com")
-    )
-
-    if bare_host not in allowed_bare and not is_baddielatina:
+    if bare_host not in allowed_bare:
         raise ValueError(
             f"This platform is not currently supported: {host}"
         )
@@ -396,20 +380,6 @@ def platform_for(url):
         "youtu.be",
     }:
         return "YouTube"
-
-    if host in {
-        "darkero.co",
-        "darkero.com",
-        "files.darkero.com",
-    }:
-        return "Darkero"
-
-    # Baddielatina
-    if host in {
-        "baddielatina.com",
-        "files.baddielatina.com",
-    }:
-        return "Baddielatina"
 
     if host in {
         "tiktok.com",
