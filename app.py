@@ -715,6 +715,7 @@ def run_gallery_dl_urls(url):
 
     urls = [url] if isinstance(url, str) else list(url)
     command.extend(urls)
+    source_platform = platform_for(urls[0]) if urls else "unknown"
     try:
         result = subprocess.run(
             command,
@@ -724,13 +725,13 @@ def run_gallery_dl_urls(url):
             check=False,
         )
     except (subprocess.TimeoutExpired, OSError) as error:
-        app.logger.warning("gallery-dl could not process %s: %s", platform_for(url), error)
+        app.logger.warning("gallery-dl could not process %s: %s", source_platform, error)
         return []
 
     if result.returncode != 0:
         app.logger.warning(
             "gallery-dl extraction failed for %s (exit %s): %s",
-            platform_for(url),
+            source_platform,
             result.returncode,
             (result.stderr or result.stdout or "No details returned")[-1200:],
         )
