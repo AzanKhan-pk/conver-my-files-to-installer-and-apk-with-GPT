@@ -15,7 +15,8 @@ import pystray
 from PIL import Image, ImageDraw
 from werkzeug.serving import make_server
 
-from app import DOWNLOAD_ROOT, app
+import app as savevido_app
+from app import app
 
 HOST = "127.0.0.1"
 PORT = int(os.getenv("PORT", "5000"))
@@ -42,7 +43,7 @@ def open_savevido(icon, item):
 
 
 def open_downloads_folder(icon, item):
-    folder = Path(DOWNLOAD_ROOT)
+    folder = Path(savevido_app.DOWNLOAD_ROOT)
     folder.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
         os.startfile(str(folder))
