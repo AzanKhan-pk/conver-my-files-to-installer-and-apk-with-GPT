@@ -1181,3 +1181,103 @@ urlInput.addEventListener("keydown", (event) => {
     fetchButton.click();
   }
 });
+
+// Persistent SaveVido download history drawer.
+const historyToggle = $("#historyToggle");
+const historyDrawer = $("#historyDrawer");
+const historyClose = $("#historyClose");
+const historyBackdrop = $("#historyBackdrop");
+const historyList = $("#historyList");
+const historyCount = $("#historyCount");
+
+function setHistoryOpen(open) {
+  if (!historyDrawer) return;
+  historyDrawer.classList.toggle("open", open);
+  historyDrawer.setAttribute("aria-hidden", String(!open));
+  historyToggle?.setAttribute("aria-expanded", String(open));
+  if (historyBackdrop) historyBackdrop.hidden = !open;
+  document.body.classList.toggle("history-open", open);
+  if (open) loadDownloadHistory();
+}
+
+function renderDownloadHistory(items) {
+  if (!historyList) return;
+  if (historyCount) historyCount.textContent = String(items.length);
+  if (!items.length) {
+    historyList.innerHTML = '<p class="history-empty">No downloads yet. Completed downloads will appear here.</p>';
+    return;
+  }
+
+  historyList.innerHTML = items.map(item => {
+    const title = escapeHtml(item.title || "Downloaded media");
+    const meta = [item.platform, item.quality, item.file_type, formatBytes(item.file_size || 0)]
+      .filter(Boolean).map(escapeHtml).join(" · ");
+    const date = escapeHtml(item.created_at || "");
+    const openButton = item.job_id && item.file_exists
+      ? `<button type="button" class="history-open-folder" data-open-job="${escapeHtml(item.job_id)}">Open folder</button>`
+      : '<span class="history-file-missing">File unavailable</span>';
+    return `
+      <article class="history-item" data-history-id="${Number(item.id)}">
+        <div class="history-item-heading">
+          <strong title="${title}">${title}</strong>
+          <button type="button" class="history-remove" data-remove-history="${Number(item.id)}" aria-label="Remove from history">×</button>
+        </div>
+        <p>${meta}</p>
+        <small>${date}</small>
+        <div class="history-item-actions">${openButton}</div>
+      </article>
+    `;
+  }).join("");
+}
+
+async function loadDownloadHistory() {
+  if (!historyList) return;
+  try {
+    const response = await fetch("/api/history");
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not load history.");
+    renderDownloadHistory(data.items || []);
+  } catch (error) {
+    historyList.innerHTML = `<p class="history-empty">${escapeHtml(error.message || "History could not be loaded.")}</p>`;
+  }
+}
+
+historyToggle?.addEventListener("click", () => {
+  setHistoryOpen(!historyDrawer.classList.contains("open"));
+});
+historyClose?.addEventListener("click", () => setHistoryOpen(false));
+historyBackdrop?.addEventListener("click", () => setHistoryOpen(false));
+
+historyList?.addEventListener("click", async (event) => {
+  const removeButton = event.target.closest("[data-remove-history]");
+  if (removeButton) {
+    const historyId = Number(removeButton.dataset.removeHistory);
+    removeButton.disabled = true;
+    try {
+      const response = await fetch(`/api/history/${historyId}`, { method: "DELETE" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not remove history item.");
+      await loadDownloadHistory();
+    } catch (error) {
+      removeButton.disabled = false;
+      alert(error.message || "Could not remove history item.");
+    }
+    return;
+  }
+
+  const openButton = event.target.closest("[data-open-job]");
+  if (openButton) {
+    openButton.disabled = true;
+    try {
+      const response = await fetch(`/api/download/${encodeURIComponent(openButton.dataset.openJob)}/open-folder`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not open folder.");
+    } catch (error) {
+      alert(error.message || "Open folder is available in the local desktop app.");
+    } finally {
+      openButton.disabled = false;
+    }
+  }
+});
+
+loadDownloadHistory();
