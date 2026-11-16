@@ -1,4 +1,5 @@
 name: Build SaveVido Windows installer
+# Rebuild with the latest progress, resume, and desktop rendering fixes.
 # Rebuild the installer from the complete download-resume fixes.
 
 on:
