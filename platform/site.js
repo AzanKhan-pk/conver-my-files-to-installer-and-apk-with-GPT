@@ -35,7 +35,7 @@ async function loadPlatformData(){
     $("data-status").textContent="Analytics is temporarily unavailable. No sample numbers are displayed.";
   }
   try{
-    const releaseRes=await fetch("./release-config.json",{cache:"no-store"});
+    const releaseRes=await fetch("/release-config.json?ts="+Date.now(),{cache:"no-store"});
     if(releaseRes.ok){
       const r=await releaseRes.json();
       const channels=r.channels||{};
@@ -45,12 +45,17 @@ async function loadPlatformData(){
       $("store-version").textContent=store.version||store.status||"Not submitted";
       $("update-status").textContent=r.update_service?.status||"Connected";
       if($("windows-status"))$("windows-status").textContent=win.status||"Not published";
+      const versionLabel=$("windows-download-version");
+      if(versionLabel)versionLabel.textContent=win.version?("Latest version: "+win.version):"Version not published";
       if($("android-status"))$("android-status").textContent=android.status||"In development";
       if($("store-status"))$("store-status").textContent=store.status||"Not submitted";
       const winLink=$("windows-download");
       if(winLink&&win.download_url){
         winLink.href=win.download_url;winLink.textContent="Download Windows installer";
         winLink.removeAttribute("aria-disabled");
+      }else if(winLink){
+        winLink.removeAttribute("href");winLink.setAttribute("aria-disabled","true");
+        winLink.textContent="Download unavailable until verified";
       }
     }
   }catch(_){}
