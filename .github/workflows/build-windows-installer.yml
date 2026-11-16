@@ -45,7 +45,11 @@ jobs:
       - name: Build SaveVido desktop application
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed with exit code $LASTEXITCODE." }
+          $webEngineModule = Get-ChildItem "dist\SaveVido" -Filter "QtWebEngineWidgets*.pyd" -Recurse | Select-Object -First 1
+          if (-not $webEngineModule) { throw "PySide6.QtWebEngineWidgets was not bundled. Refusing to create a broken installer." }
+          Write-Host "Qt WebEngine Widgets module bundled: $($webEngineModule.FullName)"
 
       - name: Remove unused Qt QML payload before packaging
         shell: pwsh
