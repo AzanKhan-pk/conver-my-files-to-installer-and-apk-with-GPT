@@ -1328,8 +1328,14 @@ def index():
             "INSERT INTO visits(created_at) VALUES (?)",
             (now_iso(),),
         )
-    # Keep the original SaveVido app-style homepage on the hosted website.
-    # The dynamic release manifest below keeps the Windows download current.
+    # On Vercel, serve the official platform page with the app preview and
+    # platform download cards. Keep the real downloader UI for the local app.
+    if os.getenv("VERCEL") == "1":
+        return send_from_directory(
+            BASE_DIR / "platform",
+            "index.html",
+            max_age=0,
+        )
     return render_template("index.html")
 
 
