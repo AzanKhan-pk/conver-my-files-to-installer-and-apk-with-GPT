@@ -17,6 +17,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: savevido-windows-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   windows-installer:
     runs-on: windows-latest
@@ -35,6 +39,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-windows.txt
+
+      - name: Verify Qt WebEngine imports
+        shell: pwsh
+        run: |
+          python -c "from PySide6.QtWebEngineWidgets import QWebEngineView; from PySide6.QtWebEngineCore import QWebEngineProfile; print('Qt WebEngine import check passed')"
 
       - name: Generate Windows application icon
         shell: pwsh
