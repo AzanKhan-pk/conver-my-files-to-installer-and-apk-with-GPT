@@ -82,8 +82,12 @@ jobs:
           $compiler = @("C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 7\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $compiler) { throw "ISCC.exe not found." }
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
-          & $compiler "/DAppVersion=$version" "installer\SaveVido.iss"
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+          Push-Location "installer"
+          try {
+            & $compiler "/DAppVersion=$version" "SaveVido.iss"
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+          }
+          finally { Pop-Location }
           if (-not (Test-Path "release\SaveVido-Setup.exe")) { throw "Installer output was not created." }
 
       - name: Publish versioned GitHub Release and refresh website manifest
