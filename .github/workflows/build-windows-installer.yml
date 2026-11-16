@@ -56,7 +56,7 @@ jobs:
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           @{ version = $version } | ConvertTo-Json | Set-Content -Path "build_info.json" -Encoding utf8
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --add-data "build_info.json;." --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --add-data "build_info.json;." --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6.QtWebEngineCore --collect-all PySide6.QtWebEngineWidgets --collect-all shiboken6 desktop_launcher.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed with exit code $LASTEXITCODE." }
           $webEngineModule = Get-ChildItem "dist\SaveVido" -Filter "QtWebEngineWidgets*.pyd" -Recurse | Select-Object -First 1
           if (-not $webEngineModule) { throw "PySide6.QtWebEngineWidgets was not bundled. Refusing to create a broken installer." }
@@ -71,6 +71,18 @@ jobs:
             Remove-Item -LiteralPath $qmlDir -Recurse -Force
           }
           if (Test-Path -LiteralPath $qmlDir) { throw "Unused Qt QML payload could not be removed: $qmlDir" }
+
+      - name: Report packaged component sizes
+        shell: pwsh
+        run: |
+          $root = "dist\SaveVido"
+          $total = (Get-ChildItem $root -File -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host ("Total unpacked app size: {0:N1} MB" -f ($total / 1MB))
+          Get-ChildItem $root -Directory | ForEach-Object {
+            $bytes = (Get-ChildItem $_.FullName -File -Recurse | Measure-Object -Property Length -Sum).Sum
+            Write-Host ("{0}: {1:N1} MB" -f $_.Name, ($bytes / 1MB))
+          }
+          Get-ChildItem $root -File | Sort-Object Length -Descending | Select-Object -First 15 Name,@{Name="MB";Expression={[math]::Round($_.Length/1MB,1)}} | Format-Table -AutoSize
 
       - name: Bundle FFmpeg
         shell: pwsh
@@ -148,7 +160,7 @@ jobs:
           if (-not (Test-Path -LiteralPath $installer)) { throw "Installer output was not created: $installer" }
           $size = (Get-Item -LiteralPath $installer).Length
           if ($size -lt 1000000) { throw "Installer output is unexpectedly small ($size bytes)." }
-          Write-Host "Installer compiled successfully: $installer ($size bytes)"
+          Write-Host ("Installer compiled successfully: {0} ({1:N1} MB)" -f $installer, ($size / 1MB))
 
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
