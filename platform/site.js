@@ -46,7 +46,11 @@ async function loadPlatformData(){
       $("update-status").textContent=r.update_service?.status||"Connected";
       if($("windows-status"))$("windows-status").textContent=win.status||"Not published";
       const versionLabel=$("windows-download-version");
-      if(versionLabel)versionLabel.textContent=win.version?("Latest version: "+win.version):"Version not published";
+      if(versionLabel)versionLabel.textContent=win.version?("Version "+win.version):"Version not published";
+      const androidVersionLabel=$("android-download-version");
+      if(androidVersionLabel)androidVersionLabel.textContent=android.version?("Version "+android.version):"In development";
+      const storeVersionLabel=$("store-download-version");
+      if(storeVersionLabel)storeVersionLabel.textContent=store.version?("Version "+store.version):"Not published";
       if($("android-status"))$("android-status").textContent=android.status||"In development";
       if($("store-status"))$("store-status").textContent=store.status||"Not submitted";
       const winLink=$("windows-download");
