@@ -1784,7 +1784,7 @@ def pause_download(job_id):
             "error": "Download job not found.",
         }), 404
 
-    if job["status"] != "downloading":
+    if job["status"] not in {"starting", "preparing", "downloading", "processing"}:
         return jsonify({
             "ok": False,
             "error": "Download is not currently running.",
