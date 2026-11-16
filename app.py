@@ -1328,18 +1328,9 @@ def index():
             "INSERT INTO visits(created_at) VALUES (?)",
             (now_iso(),),
         )
-    # The hosted website uses the platform download landing page.
-    # The bundled Windows desktop app must keep its local downloader interface.
-    if os.getenv("VERCEL") != "1":
-        return render_template("index.html")
-
-    response = send_file(
-        BASE_DIR / "platform" / "index.html",
-        mimetype="text/html",
-        max_age=0,
-    )
-    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
-    return response
+    # Keep the original SaveVido app-style homepage on the hosted website.
+    # The dynamic release manifest below keeps the Windows download current.
+    return render_template("index.html")
 
 
 @app.get("/release-config.json")
