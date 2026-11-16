@@ -944,7 +944,7 @@ historyList?.addEventListener("click", async (event) => {
       setDownloadProgressMessage(panel, "Resuming from saved progress...");
       const media = {
         title: itemElement?.querySelector(".history-item-heading strong")?.textContent || "video",
-        mode: "video",
+        mode: statusData?.job?.mode || "video",
       };
       monitorDownload(jobId, panel, media).catch(error => {
         console.error("Resumed download monitor error:", error);
