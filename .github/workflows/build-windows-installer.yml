@@ -15,7 +15,7 @@ on:
       - ".github/workflows/build-windows-installer.yml"
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   windows-installer:
@@ -72,10 +72,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
           if (-not (Test-Path "release\SaveVido-Setup.exe")) { throw "Installer output was not created." }
 
-      - name: Upload Windows installer artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: SaveVido-Windows-Installer
-          path: release/SaveVido-Setup.exe
-          if-no-files-found: error
-          retention-days: 14
+      - name: Publish permanent GitHub Release download
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create v1.0.0 "release/SaveVido-Setup.exe" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_REF_NAME" --title "SaveVido 1.0.0" --notes "Windows installer for SaveVido. Requires Windows 10 or Windows 11. Installation and in-app download behavior should be tested on a supported PC."
