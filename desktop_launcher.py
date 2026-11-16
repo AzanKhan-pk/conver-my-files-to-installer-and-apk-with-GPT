@@ -1,24 +1,28 @@
-"""SaveVido Windows tray launcher.
+"""SaveVido native Windows desktop launcher.
 
-Run with: python desktop_launcher.py
-The Flask download engine stays alive while the browser window is closed.
-Interrupted jobs are persisted and can be resumed after SaveVido is restarted.
+The downloader runs locally in a background Flask server. The interface is
+rendered inside the app's own Qt WebEngine window; it never opens Chrome.
 """
 import os
 import subprocess
 import sys
 import threading
-import webbrowser
 from pathlib import Path
 
-# Use the bundled FFmpeg tools when running the packaged Windows application.
-APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
-BUNDLED_FFMPEG = APP_ROOT / "ffmpeg"
-if BUNDLED_FFMPEG.is_dir():
-    os.environ["PATH"] = str(BUNDLED_FFMPEG) + os.pathsep + os.environ.get("PATH", "")
+# Work around legacy graphics drivers on older Windows PCs.
+os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-gpu-compositing")
+os.environ.setdefault("QT_OPENGL", "software")
 
-import pystray
-from PIL import Image, ImageDraw
+from PySide6.QtCore import QUrl
+from PySide6.QtGui import QAction, QIcon
+from PySide6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QMenu,
+    QMessageBox,
+    QSystemTrayIcon,
+)
+from PySide6.QtWebEngineWidgets import QWebEngineView
 from werkzeug.serving import make_server
 
 import app as savevido_app
@@ -27,29 +31,38 @@ from app import app
 HOST = "127.0.0.1"
 PORT = int(os.getenv("PORT", "5000"))
 APP_URL = f"http://{HOST}:{PORT}"
+APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
+ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
+
+server = make_server(HOST, PORT, app, threaded=True)
+server_thread = threading.Thread(
+    target=server.serve_forever,
+    name="SaveVidoLocalServer",
+    daemon=True,
+)
 
 
-def make_icon_image():
-    resource_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
-    icon_path = resource_root / "static" / "logo.png"
-    if icon_path.is_file():
-        try:
-            return Image.open(icon_path).convert("RGBA").resize((64, 64))
-        except Exception:
-            pass
+class SaveVidoWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("SaveVido — Video Downloader")
+        self.setMinimumSize(900, 650)
+        self.resize(1180, 780)
+        if ICON_PATH.is_file():
+            self.setWindowIcon(QIcon(str(ICON_PATH)))
 
-    image = Image.new("RGBA", (64, 64), (18, 20, 32, 255))
-    draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((5, 5, 59, 59), radius=13, fill=(180, 235, 70, 255))
-    draw.text((17, 17), "S", fill=(18, 20, 32, 255))
-    return image
+        self.browser = QWebEngineView(self)
+        self.browser.setUrl(QUrl(APP_URL))
+        self.setCentralWidget(self.browser)
+
+    def closeEvent(self, event):
+        # Keep the downloader available in the notification area.
+        event.ignore()
+        self.hide()
 
 
-def open_savevido(icon, item):
-    webbrowser.open(APP_URL)
-
-
-def open_downloads_folder(icon, item):
+def open_downloads_folder():
     folder = Path(savevido_app.DOWNLOAD_ROOT)
     folder.mkdir(parents=True, exist_ok=True)
     if os.name == "nt":
@@ -60,33 +73,48 @@ def open_downloads_folder(icon, item):
         subprocess.Popen(["xdg-open", str(folder)])
 
 
-def exit_savevido(icon, item):
-    icon.stop()
-    threading.Thread(target=server.shutdown, daemon=True).start()
-
-
-server = make_server(HOST, PORT, app, threaded=True)
-server_thread = threading.Thread(
-    target=server.serve_forever,
-    name="SaveVidoServer",
-    daemon=True,
-)
-
-
 def main():
+    qt_app = QApplication(sys.argv)
+    qt_app.setApplicationName("SaveVido")
+    qt_app.setQuitOnLastWindowClosed(False)
+    if ICON_PATH.is_file():
+        qt_app.setWindowIcon(QIcon(str(ICON_PATH)))
+
     server_thread.start()
-    webbrowser.open(APP_URL)
-    menu = pystray.Menu(
-        pystray.MenuItem("Open SaveVido", open_savevido, default=True),
-        pystray.MenuItem("Open downloads folder", open_downloads_folder),
-        pystray.MenuItem("Exit SaveVido", exit_savevido),
-    )
-    icon = pystray.Icon("SaveVido", make_icon_image(), "SaveVido", menu)
-    try:
-        icon.run()
-    finally:
-        server.shutdown()
-        server.server_close()
+    window = SaveVidoWindow()
+
+    if not QSystemTrayIcon.isSystemTrayAvailable():
+        QMessageBox.warning(
+            window,
+            "SaveVido",
+            "The system tray is unavailable. SaveVido will remain open in its app window.",
+        )
+    else:
+        tray = QSystemTrayIcon(QIcon(str(ICON_PATH)), qt_app)
+        tray.setToolTip("SaveVido — Video Downloader")
+        menu = QMenu()
+        open_action = QAction("Open SaveVido", qt_app)
+        open_action.triggered.connect(lambda: (window.show(), window.raise_(), window.activateWindow()))
+        folder_action = QAction("Open downloads folder", qt_app)
+        folder_action.triggered.connect(open_downloads_folder)
+        exit_action = QAction("Exit SaveVido", qt_app)
+        exit_action.triggered.connect(qt_app.quit)
+        menu.addAction(open_action)
+        menu.addAction(folder_action)
+        menu.addSeparator()
+        menu.addAction(exit_action)
+        tray.setContextMenu(menu)
+        tray.activated.connect(
+            lambda reason: (window.show(), window.raise_(), window.activateWindow())
+            if reason == QSystemTrayIcon.ActivationReason.Trigger else None
+        )
+        tray.show()
+
+    window.show()
+    qt_app.aboutToQuit.connect(server.shutdown)
+    qt_app.aboutToQuit.connect(server.server_close)
+    exit_code = qt_app.exec()
+    sys.exit(exit_code)
 
 
 if __name__ == "__main__":
