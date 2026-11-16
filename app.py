@@ -1344,12 +1344,29 @@ def index():
 
 @app.get("/release-config.json")
 def release_config():
-    response = send_from_directory(
-        BASE_DIR / "platform",
-        "release-config.json",
-        mimetype="application/json",
-        max_age=0,
+    # Read the manifest from the GitHub branch at request time. This means the
+    # already-deployed website sees each successfully published release without
+    # waiting for a separate Vercel deployment.
+    manifest_url = (
+        "https://raw.githubusercontent.com/"
+        "AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/"
+        "savevido-central-platform/platform/release-config.json"
     )
+    try:
+        manifest_response = requests.get(manifest_url, timeout=8)
+        manifest_response.raise_for_status()
+        manifest_data = manifest_response.json()
+        if not isinstance(manifest_data, dict):
+            raise ValueError("Release manifest must be a JSON object.")
+        response = jsonify(manifest_data)
+    except Exception:
+        # Keep the last bundled manifest available if GitHub is temporarily down.
+        response = send_from_directory(
+            BASE_DIR / "platform",
+            "release-config.json",
+            mimetype="application/json",
+            max_age=0,
+        )
     response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return response
 
