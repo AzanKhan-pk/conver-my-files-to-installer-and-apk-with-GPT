@@ -3,7 +3,9 @@
 The downloader runs locally in a background Flask server. The interface is
 rendered inside the app's own Qt WebEngine window; it never opens Chrome.
 """
+import json
 import os
+import re
 import subprocess
 import sys
 
@@ -22,8 +24,8 @@ from pathlib import Path
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-gpu-compositing")
 os.environ.setdefault("QT_OPENGL", "software")
 
-from PySide6.QtCore import QUrl, Qt
-from PySide6.QtGui import QAction, QIcon
+from PySide6.QtCore import QObject, QTimer, QUrl, Qt, Signal
+from PySide6.QtGui import QAction, QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -33,6 +35,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from werkzeug.serving import make_server
+import requests
 
 import app as savevido_app
 from app import app
@@ -43,6 +46,54 @@ APP_URL = f"http://{HOST}:{PORT}"
 APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
 ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
+UPDATE_MANIFEST_URL = "https://savevido-central-platform.vercel.app/release-config.json"
+
+
+def read_app_version():
+    try:
+        data = json.loads((RESOURCE_ROOT / "build_info.json").read_text(encoding="utf-8-sig"))
+        return str(data.get("version") or "0.0.0")
+    except Exception:
+        return "0.0.0"
+
+
+APP_VERSION = read_app_version()
+
+
+def version_tuple(value):
+    parts = re.findall(r"\\d+", str(value))
+    return tuple(int(part) for part in parts) if parts else (0,)
+
+
+class UpdateChecker(QObject):
+    update_available = Signal(str, str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.offered_version = None
+
+    def check(self):
+        def worker():
+            try:
+                response = requests.get(UPDATE_MANIFEST_URL, timeout=(5, 10))
+                response.raise_for_status()
+                manifest = response.json()
+                channel = manifest.get("channels", {}).get("windows", {})
+                latest = str(channel.get("version") or manifest.get("current_version") or "")
+                download_url = str(channel.get("download_url") or "")
+                if (
+                    latest
+                    and download_url.startswith("https://")
+                    and version_tuple(latest) > version_tuple(APP_VERSION)
+                    and latest != self.offered_version
+                ):
+                    self.offered_version = latest
+                    self.update_available.emit(latest, download_url)
+            except Exception:
+                # Offline or unavailable update service must never stop the downloader.
+                pass
+
+        threading.Thread(target=worker, name="SaveVidoUpdateCheck", daemon=True).start()
 
 server = make_server(HOST, PORT, app, threaded=True)
 server_thread = threading.Thread(
@@ -55,7 +106,7 @@ server_thread = threading.Thread(
 class SaveVidoWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("SaveVido — Video Downloader")
+        self.setWindowTitle(f"SaveVido {APP_VERSION} — Video Downloader")
         self.setMinimumSize(900, 650)
         self.resize(1180, 780)
         if ICON_PATH.is_file():
@@ -121,6 +172,30 @@ def main():
         tray.show()
 
     window.show()
+
+    # Check shortly after startup and then every six hours. The check runs in
+    # a worker thread; all dialogs and browser actions stay on the Qt UI thread.
+    updater = UpdateChecker(qt_app)
+
+    def show_update_notice(version, download_url):
+        answer = QMessageBox.question(
+            window,
+            "SaveVido update available",
+            f"SaveVido {version} is available. You are using version {APP_VERSION}.\\n\\n"
+            "Would you like to download and install the update now?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if answer == QMessageBox.StandardButton.Yes:
+            QDesktopServices.openUrl(QUrl(download_url))
+
+    updater.update_available.connect(show_update_notice)
+    update_timer = QTimer(qt_app)
+    update_timer.setInterval(6 * 60 * 60 * 1000)
+    update_timer.timeout.connect(updater.check)
+    update_timer.start()
+    QTimer.singleShot(5000, updater.check)
+
     qt_app.aboutToQuit.connect(server.shutdown)
     qt_app.aboutToQuit.connect(server.server_close)
     exit_code = qt_app.exec()
