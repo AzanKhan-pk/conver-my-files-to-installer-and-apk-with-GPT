@@ -29,7 +29,14 @@ from flask import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "analytics.db"
+
+# Keep writable user data out of Program Files / the bundled application folder.
+if getattr(sys, "frozen", False) and os.name == "nt":
+    APP_DATA_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "SaveVido"
+else:
+    APP_DATA_DIR = BASE_DIR
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = APP_DATA_DIR / "analytics.db"
 
 # Keep partial downloads outside the OS temp directory so they survive
 # reboots and Windows temporary-file cleanup.
