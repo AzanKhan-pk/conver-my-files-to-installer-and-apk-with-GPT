@@ -822,9 +822,22 @@ function renderDownloadHistory(items) {
     } else if (active) {
       action = '<span class="history-file-missing">Working…</span>';
     }
+    const percent = Math.max(0, Math.min(100, Number(item.percent || 0)));
     const progress = status === "completed"
       ? "Completed"
-      : `${escapeHtml(status.replaceAll("_", " "))} · ${Number(item.percent || 0).toFixed(1)}% · ${formatBytes(item.downloaded_bytes || 0)} / ${formatBytes(item.total_bytes || 0)}`;
+      : `${escapeHtml(status.replaceAll("_", " "))} · ${percent.toFixed(1)}% · ${formatBytes(item.downloaded_bytes || 0)} / ${formatBytes(item.total_bytes || 0)}`;
+    const progressTrack = status === "completed" ? "" : `
+      <div class="history-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
+        <div class="history-progress-fill" style="width:${percent}%"></div>
+      </div>`;
+    let controls = action;
+    if (jobId && active) {
+      controls = `<button type="button" class="history-open-folder" data-pause-job="${jobId}">Pause</button>
+        <button type="button" class="history-cancel" data-cancel-job="${jobId}">Cancel</button>`;
+    } else if (jobId && resumable) {
+      controls = `<button type="button" class="history-open-folder" data-resume-job="${jobId}">Resume</button>
+        <button type="button" class="history-cancel" data-cancel-job="${jobId}">Cancel</button>`;
+    }
     return `
       <article class="history-item" data-history-id="${Number(item.id) || ""}" data-job-id="${jobId}">
         <div class="history-item-heading">
@@ -834,7 +847,8 @@ function renderDownloadHistory(items) {
         <p>${meta}</p>
         <small>${date}</small>
         <div class="history-live-progress">${progress}</div>
-        <div class="history-item-actions">${action}</div>
+        ${progressTrack}
+        <div class="history-item-actions">${controls}</div>
       </article>
     `;
   }).join("");
@@ -867,10 +881,15 @@ async function monitorHistoryJob(jobId, itemElement) {
       if (!response.ok || !data.ok) throw new Error(data.error || "Status unavailable.");
       const job = data.job;
       const statusElement = itemElement.querySelector(".history-live-progress");
+      const progressFill = itemElement.querySelector(".history-progress-fill");
+      const progressTrack = itemElement.querySelector(".history-progress-track");
+      const percent = Math.max(0, Math.min(100, Number(job.percent || 0)));
       if (statusElement) {
         statusElement.textContent =
-          `${job.status} · ${Number(job.percent || 0).toFixed(1)}% · ${formatBytes(job.downloaded_bytes || 0)} / ${formatBytes(job.total_bytes || 0)}`;
+          `${job.status} · ${percent.toFixed(1)}% · ${formatBytes(job.downloaded_bytes || 0)} / ${formatBytes(job.total_bytes || 0)}`;
       }
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (progressTrack) progressTrack.setAttribute("aria-valuenow", String(percent));
       if (["paused", "network_error", "completed", "error", "cancelled"].includes(job.status)) {
         await loadDownloadHistory();
         return;
@@ -909,10 +928,49 @@ historyList?.addEventListener("click", async (event) => {
       const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/resume`, { method: "POST" });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not resume download.");
-      await monitorHistoryJob(jobId, itemElement);
+      const panel = createDownloadPanel(jobId, itemElement?.querySelector(".history-item-heading strong")?.textContent || "Resuming download...");
+      const statusResponse = await fetch(`/api/download/${encodeURIComponent(jobId)}/status`);
+      const statusData = await statusResponse.json();
+      if (statusResponse.ok && statusData.ok) {
+        const job = statusData.job;
+        updateDownloadProgress(
+          panel,
+          Number(job.percent || 0),
+          formatBytes(job.downloaded_bytes || 0),
+          formatBytes(job.total_bytes || 0),
+          formatBytes(job.speed || 0)
+        );
+      }
+      setDownloadProgressMessage(panel, "Resuming from saved progress...");
+      const media = {
+        title: itemElement?.querySelector(".history-item-heading strong")?.textContent || "video",
+        mode: "video",
+      };
+      monitorDownload(jobId, panel, media).catch(error => {
+        console.error("Resumed download monitor error:", error);
+        setDownloadProgressMessage(panel, error.message || "Download failed.", true);
+        disableDownloadControls(panel);
+      });
+      await loadDownloadHistory();
     } catch (error) {
       resumeButton.disabled = false;
       alert(error.message || "Could not resume download.");
+    }
+    return;
+  }
+
+  const cancelButton = event.target.closest("[data-cancel-job]");
+  if (cancelButton) {
+    const jobId = cancelButton.dataset.cancelJob;
+    cancelButton.disabled = true;
+    try {
+      const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not cancel download.");
+      await loadDownloadHistory();
+    } catch (error) {
+      cancelButton.disabled = false;
+      alert(error.message || "Could not cancel download.");
     }
     return;
   }
