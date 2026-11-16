@@ -1,7 +1,7 @@
 {
   "product": "SaveVido",
   "current_version": "1.0.0",
-  "updated_at": "2026-11-15T00:00:00Z",
+  "updated_at": "2026-11-16T00:00:00Z",
   "update_service": {
     "status": "Central release manifest is live; desktop and Android client auto-update integration is pending",
     "manifest_url": "/release-config.json"
@@ -9,10 +9,10 @@
   "channels": {
     "windows": {
       "version": "1.0.0",
-      "status": "Build succeeded — install test pending",
-      "download_url": null,
+      "status": "Windows installer artifact available in GitHub Actions (sign-in required; expires 30 Nov 2026). Install test pending.",
+      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/actions/runs/43819895291",
       "minimum_os": "Windows 10/11",
-      "sha256": null
+      "sha256": "76fa4301c697f06ecbef043fe22705bb8a23f66fd7a275d85dc4926a00969576"
     },
     "android": {
       "version": null,
