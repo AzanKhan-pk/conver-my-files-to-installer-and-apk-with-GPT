@@ -1,12 +1,14 @@
 #define AppName "SaveVido"
 #define AppVersion "1.0.0"
-#define AppPublisher "SaveVido"
+#define AppPublisher "AZAN KHAN"
 #define AppExeName "SaveVido.exe"
 
 [Setup]
 AppId={{A0E9A9D8-9C3E-4DB8-8D65-3B4D14C1A501}
 AppName={#AppName}
 AppVersion={#AppVersion}
+AppVerName=SaveVido {#AppVersion} — AZAN KHAN
+AppComments=Created by AZAN KHAN
 AppPublisher={#AppPublisher}
 DefaultDirName={localappdata}\Programs\SaveVido
 DefaultGroupName={#AppName}
@@ -16,6 +18,7 @@ OutputBaseFilename=SaveVido-Setup
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
+WizardSmallImageFile=savevido-installer-logo.bmp
 PrivilegesRequired=lowest
 UninstallDisplayIcon={app}\{#AppExeName}
 ArchitecturesInstallIn64BitMode=x64
