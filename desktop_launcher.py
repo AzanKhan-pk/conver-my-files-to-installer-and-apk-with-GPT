@@ -46,7 +46,7 @@ APP_URL = f"http://{HOST}:{PORT}"
 APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
 ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
-UPDATE_MANIFEST_URL = "https://savevido-central-platform.vercel.app/release-config.json"
+UPDATE_MANIFEST_URL = "https://raw.githubusercontent.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/savevido-central-platform/platform/release-config.json"
 
 
 def read_app_version():
