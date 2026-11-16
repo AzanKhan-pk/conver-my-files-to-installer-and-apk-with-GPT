@@ -22,7 +22,7 @@ from pathlib import Path
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu --disable-gpu-compositing")
 os.environ.setdefault("QT_OPENGL", "software")
 
-from PySide6.QtCore import QUrl
+from PySide6.QtCore import QUrl, Qt
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import (
     QApplication,
@@ -62,6 +62,7 @@ class SaveVidoWindow(QMainWindow):
             self.setWindowIcon(QIcon(str(ICON_PATH)))
 
         self.browser = QWebEngineView(self)
+        self.browser.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
         self.browser.setUrl(QUrl(APP_URL))
         self.setCentralWidget(self.browser)
 
