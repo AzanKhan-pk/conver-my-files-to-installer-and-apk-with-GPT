@@ -155,7 +155,7 @@ select option{background:var(--surface);color:var(--ink)}
   font-size: 15px;
 }
 
-#downloadProgressPercent {
+[data-role="percent"] {
   font-size: 14px;
   font-weight: 700;
 }
@@ -643,7 +643,7 @@ select option{background:var(--surface);color:var(--ink)}
 .notification-enable-button:hover { border-color: var(--line-bright); color: var(--ink); }
 .download-activity-list { display: grid; gap: 12px; margin-top: 14px; }
 .download-activity-list:empty { display: none; }
-#downloadProgressPanel {
+.download-progress-panel {
   margin-top: 0;
   padding: 17px;
   border: 1px solid var(--line-bright);
