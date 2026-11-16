@@ -1328,6 +1328,11 @@ def index():
             "INSERT INTO visits(created_at) VALUES (?)",
             (now_iso(),),
         )
+    # The hosted website uses the platform download landing page.
+    # The bundled Windows desktop app must keep its local downloader interface.
+    if os.getenv("VERCEL") != "1":
+        return render_template("index.html")
+
     response = send_file(
         BASE_DIR / "platform" / "index.html",
         mimetype="text/html",
