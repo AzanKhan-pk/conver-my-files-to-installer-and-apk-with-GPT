@@ -4,7 +4,7 @@
 #endif
 #define AppPublisher "AZAN KHAN"
 #define AppExeName "SaveVido.exe"
-#define RepoRoot AddBackslash(SourcePath) + ".."
+#define RepoRoot GetEnv("GITHUB_WORKSPACE")"
 
 #if !FileExists(RepoRoot + "\static\savevido.ico")
   #error "Missing installer icon: static\savevido.ico"
