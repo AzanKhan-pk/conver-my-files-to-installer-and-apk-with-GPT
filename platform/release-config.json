@@ -1,30 +1,41 @@
 {
   "product": "SaveVido",
   "current_version": "1.0.0",
-  "updated_at": "2026-11-16T00:00:00Z",
+  "updated_at": "2026-11-16T07:32:08.999Z",
   "update_service": {
-    "status": "Central release manifest is live; desktop and Android client auto-update integration is pending",
-    "manifest_url": "/release-config.json"
+    "status": "Central release manifest available for version and download checks. App-side automatic update integration is being developed.",
+    "manifest_url": "https://savevido-central-platform.vercel.app/release-config.json",
+    "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases",
+    "channels": {
+      "windows_latest": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido-Setup.exe",
+      "android_latest": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido.apk",
+      "microsoft_store": "https://www.microsoft.com/store/apps"
+    }
   },
   "channels": {
     "windows": {
       "version": "1.0.0",
-      "status": "Available: direct Windows installer download. Windows 10/11 supported; installation test on end-user PCs is pending.",
-      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/download/v1.0.0/SaveVido-Setup.exe",
+      "status": "Available: direct Windows installer download.",
+      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido-Setup.exe",
       "minimum_os": "Windows 10/11",
-      "sha256": "9b079852b7072605378c288241620cdea185b053d174348f0256d42ccf9545ed"
+      "sha256": "9b079852b7072605378c288241620cdea185b053d174348f0256d42ccf9545ed",
+      "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
     },
     "android": {
       "version": null,
-      "status": "Native Android APK has not been built yet",
+      "status": "Android app is being developed. APK download will be enabled after a real installable package is built and checked.",
       "download_url": null,
       "minimum_os": "Android 8.0+",
-      "sha256": null
+      "sha256": null,
+      "latest_download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido.apk",
+      "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
     },
     "microsoft_store": {
       "version": null,
-      "status": "MSIX packaging and Store submission pending",
-      "download_url": null
+      "status": "Reserved for future MSIX package and Microsoft Store publication.",
+      "download_url": null,
+      "product_page_url": null,
+      "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
     }
   },
   "ads": {
