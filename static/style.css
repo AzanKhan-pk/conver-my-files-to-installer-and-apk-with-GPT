@@ -793,3 +793,33 @@ select option{background:var(--surface);color:var(--ink)}
   cursor: pointer;
 }
 .browse-location-button:disabled { opacity: .55; cursor: wait; }
+
+
+/* Download history progress and controls */
+[hidden] { display: none !important; }
+.history-progress-track {
+  width: 100%;
+  height: 6px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.10);
+}
+.history-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00e5ff, #7c3aed);
+  transition: width .35s ease;
+}
+.history-live-progress { margin-top: 9px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.history-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.history-cancel {
+  padding: 8px 11px;
+  border: 1px solid rgba(255,110,110,.55);
+  background: transparent;
+  color: #ff8d8d;
+  font-size: 11px;
+  cursor: pointer;
+}
+.history-item-actions button:disabled { opacity: .45; cursor: wait; }
