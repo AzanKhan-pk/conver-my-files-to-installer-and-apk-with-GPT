@@ -31,8 +31,7 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.SAVEVIDO_RELEASE_TOKEN }}
+        # Use the automatic workflow token for checkout; a PAT is optional and only used for release publishing.
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -219,7 +218,7 @@ jobs:
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           $tag = "v$version"
