@@ -53,5 +53,6 @@ function drawChart(points){
   ctx.stroke();ctx.lineTo(w,h);ctx.lineTo(0,h);ctx.closePath();ctx.fillStyle="#b8f34c18";ctx.fill();
 }
 trackPageView();
+setInterval(trackPageView,120000);
 loadPlatformData();
 setInterval(loadPlatformData,30000);
