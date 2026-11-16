@@ -9,14 +9,14 @@
   "channels": {
     "windows": {
       "version": "1.0.0",
-      "status": "Windows installer artifact available in GitHub Actions (sign-in required; expires 30 Nov 2026). Install test pending.",
-      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/actions/runs/43819895291",
+      "status": "Windows installer release will be available after the automated build and publication complete. Installation test pending.",
+      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/download/v1.0.0/SaveVido-Setup.exe",
       "minimum_os": "Windows 10/11",
-      "sha256": "76fa4301c697f06ecbef043fe22705bb8a23f66fd7a275d85dc4926a00969576"
+      "sha256": "9b079852b7072605378c288241620cdea185b053d174348f0256d42ccf9545ed"
     },
     "android": {
       "version": null,
-      "status": "Native Android client in development",
+      "status": "Native Android APK has not been built yet",
       "download_url": null,
       "minimum_os": "Android 8.0+",
       "sha256": null
