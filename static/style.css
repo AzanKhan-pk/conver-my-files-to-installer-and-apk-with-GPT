@@ -214,14 +214,25 @@ select option{background:var(--surface);color:var(--ink)}
 }
 
 .download-progress-actions button {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
   padding: 10px 16px;
   cursor: pointer;
   font: inherit;
+  font-weight: 600;
 }
-
+.download-progress-actions button[data-action="pause"],
+.download-progress-actions button[data-action="resume"] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+.download-progress-actions button[data-action="cancel"] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 .download-progress-actions button:hover {
+  background: rgba(255, 255, 255, 0.10);
   border-color: currentColor;
 }
 
@@ -823,3 +834,37 @@ select option{background:var(--surface);color:var(--ink)}
   cursor: pointer;
 }
 .history-item-actions button:disabled { opacity: .45; cursor: wait; }
+
+
+/* Keep the native desktop app responsive on older integrated/legacy graphics. */
+html.savevido-desktop { scroll-behavior: auto !important; }
+html.savevido-desktop body {
+  background: linear-gradient(135deg, oklch(10% .018 275), oklch(14% .02 275) 52%, oklch(11% .016 300));
+}
+html.savevido-desktop body::before,
+html.savevido-desktop body::after,
+html.savevido-desktop .noise {
+  display: none !important;
+}
+html.savevido-desktop .signal,
+html.savevido-desktop .result,
+html.savevido-desktop .download-progress-panel,
+html.savevido-desktop .tool-panel,
+html.savevido-desktop .history-drawer {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.savevido-desktop .orbit,
+html.savevido-desktop .download-progress-fill {
+  animation: none !important;
+}
+html.savevido-desktop .reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+html.savevido-desktop *,
+html.savevido-desktop *::before,
+html.savevido-desktop *::after {
+  scroll-behavior: auto !important;
+}
