@@ -319,6 +319,14 @@ fetchButton.addEventListener("click", async () => {
           "images.unsplash.com"
         ];
 
+        // TikTok video links must go straight to yt-dlp. Sending every
+        // TikTok URL through gallery-dl first adds a second slow request
+        // before the actual video metadata lookup.
+        const isTikTokVideo = isHostOrSubdomain("tiktok.com")
+          && /\/video\/\d+/.test(path);
+        if (isTikTokVideo) return false;
+
+        // Keep direct image URLs and TikTok photo posts eligible for gallery extraction.
         return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
           || supportedImageSites.some(isHostOrSubdomain);
       } catch (_) {
