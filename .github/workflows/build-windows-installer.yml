@@ -66,15 +66,8 @@ jobs:
       - name: Prepare branded installer artwork
         shell: pwsh
         run: |
-          Add-Type -AssemblyName System.Drawing
-          $source = [System.Drawing.Image]::FromFile((Resolve-Path "installer\savevido-installer-logo.png"))
-          $bitmap = New-Object System.Drawing.Bitmap 55,55
-          $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-          $graphics.Clear([System.Drawing.Color]::White)
-          $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
-          $graphics.DrawImage($source, 0, 0, 55, 55)
-          $bitmap.Save((Join-Path (Get-Location) "installer\savevido-installer-logo.bmp"), [System.Drawing.Imaging.ImageFormat]::Bmp)
-          $graphics.Dispose(); $bitmap.Dispose(); $source.Dispose()
+          python -m pip install Pillow
+          python -c "from PIL import Image; im=Image.open('installer/savevido-installer-logo.png').convert('RGB'); im.resize((55,55), Image.Resampling.LANCZOS).save('installer/savevido-installer-logo.bmp')"
 
       - name: Compile installer
         shell: pwsh
