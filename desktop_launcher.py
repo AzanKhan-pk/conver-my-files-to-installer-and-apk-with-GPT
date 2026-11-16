@@ -6,6 +6,15 @@ rendered inside the app's own Qt WebEngine window; it never opens Chrome.
 import os
 import subprocess
 import sys
+
+# Give Windows a stable application identity so the taskbar groups the
+# running window with the installed SaveVido shortcut and uses its S icon.
+if sys.platform == "win32":
+    try:
+        import ctypes
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("AZANKHAN.SaveVido")
+    except Exception:
+        pass
 import threading
 from pathlib import Path
 
