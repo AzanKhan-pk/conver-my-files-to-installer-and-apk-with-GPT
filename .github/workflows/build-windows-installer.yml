@@ -47,6 +47,16 @@ jobs:
         run: |
           python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
 
+      - name: Remove unused Qt QML payload before packaging
+        shell: pwsh
+        run: |
+          $qmlDir = Join-Path $env:GITHUB_WORKSPACE "dist\\SaveVido\\_internal\\PySide6\\qml"
+          if (Test-Path -LiteralPath $qmlDir) {
+            Write-Host "Removing optional Qt QML modules not used by the Qt WebEngine Widgets desktop UI: $qmlDir"
+            Remove-Item -LiteralPath $qmlDir -Recurse -Force
+          }
+          if (Test-Path -LiteralPath $qmlDir) { throw "Unused Qt QML payload could not be removed: $qmlDir" }
+
       - name: Bundle FFmpeg
         shell: pwsh
         run: |
