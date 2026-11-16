@@ -36,10 +36,16 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements-windows.txt
 
+      - name: Generate Windows application icon
+        shell: pwsh
+        run: |
+          python -m pip install Pillow
+          python -c "from PIL import Image; im=Image.open('static/icon-512.png').convert('RGBA'); im.save('static/savevido.ico',format='ICO',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
       - name: Build SaveVido desktop application
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --add-data "templates;templates" --add-data "static;static" --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
 
       - name: Bundle FFmpeg
         shell: pwsh
