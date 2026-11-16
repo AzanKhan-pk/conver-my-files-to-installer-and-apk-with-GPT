@@ -19,7 +19,8 @@ permissions:
 
 concurrency:
   group: savevido-windows-${{ github.ref }}
-  cancel-in-progress: true
+  # Queue newer commits instead of canceling an installer during compression.
+  cancel-in-progress: false
 
 jobs:
   windows-installer:
