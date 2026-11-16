@@ -1,5 +1,7 @@
 #define AppName "SaveVido"
-#define AppVersion "1.0.0"
+#ifndef AppVersion
+  #define AppVersion "1.0.0"
+#endif
 #define AppPublisher "AZAN KHAN"
 #define AppExeName "SaveVido.exe"
 
@@ -10,6 +12,9 @@ AppVersion={#AppVersion}
 AppVerName=SaveVido {#AppVersion} — AZAN KHAN
 AppComments=Created by AZAN KHAN
 AppPublisher={#AppPublisher}
+SetupIconFile=..\\static\\savevido.ico
+Uninstallable=yes
+CloseApplications=yes
 DefaultDirName={localappdata}\Programs\SaveVido
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -28,7 +33,7 @@ MinVersion=10.0
 Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
-Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: unchecked
+Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription: "Additional shortcuts:"; Flags: checkedonce
 
 [Files]
 Source: "..\dist\SaveVido\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
