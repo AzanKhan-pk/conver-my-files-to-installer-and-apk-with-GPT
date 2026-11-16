@@ -11,6 +11,12 @@ import threading
 import webbrowser
 from pathlib import Path
 
+# Use the bundled FFmpeg tools when running the packaged Windows application.
+APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
+BUNDLED_FFMPEG = APP_ROOT / "ffmpeg"
+if BUNDLED_FFMPEG.is_dir():
+    os.environ["PATH"] = str(BUNDLED_FFMPEG) + os.pathsep + os.environ.get("PATH", "")
+
 import pystray
 from PIL import Image, ImageDraw
 from werkzeug.serving import make_server
@@ -24,7 +30,8 @@ APP_URL = f"http://{HOST}:{PORT}"
 
 
 def make_icon_image():
-    icon_path = Path(__file__).resolve().parent / "static" / "logo.png"
+    resource_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    icon_path = resource_root / "static" / "logo.png"
     if icon_path.is_file():
         try:
             return Image.open(icon_path).convert("RGBA").resize((64, 64))
