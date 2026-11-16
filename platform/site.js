@@ -35,12 +35,13 @@ async function loadPlatformData(){
     $("data-status").textContent="Analytics is temporarily unavailable. No sample numbers are displayed.";
   }
   try{
-    const releaseRes=await fetch("./update-manifest.json",{cache:"no-store"});
+    const releaseRes=await fetch("./release-config.json",{cache:"no-store"});
     if(releaseRes.ok){
       const r=await releaseRes.json();
-      $("windows-version").textContent=r.channels?.windows?.version||"Not published";
-      $("android-version").textContent=r.channels?.android?.version||"Not published";
-      $("update-status").textContent="Connected";
+      $("windows-version").textContent=r.channels?.windows?.version||r.channels?.windows?.status||"Not published";
+      $("android-version").textContent=r.channels?.android?.version||r.channels?.android?.status||"In development";
+      $("store-version").textContent=r.channels?.microsoft_store?.version||r.channels?.microsoft_store?.status||"Not submitted";
+      $("update-status").textContent=r.update_service?.status||"Connected";
     }
   }catch(_){}
 }
