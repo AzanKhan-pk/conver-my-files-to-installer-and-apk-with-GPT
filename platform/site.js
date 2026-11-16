@@ -38,9 +38,9 @@ async function loadPlatformData(){
     const releaseRes=await fetch("./release-config.json",{cache:"no-store"});
     if(releaseRes.ok){
       const r=await releaseRes.json();
-      $("windows-version").textContent=r.channels?.windows?.version||r.channels?.windows?.status||"Not published";
-      $("android-version").textContent=r.channels?.android?.version||r.channels?.android?.status||"In development";
-      $("store-version").textContent=r.channels?.microsoft_store?.version||r.channels?.microsoft_store?.status||"Not submitted";
+      $("windows-version").textContent=r.channels?.windows?.download_url?r.channels.windows.version:(r.channels?.windows?.status||"Not published");
+      $("android-version").textContent=r.channels?.android?.download_url?r.channels.android.version:(r.channels?.android?.status||"In development");
+      $("store-version").textContent=r.channels?.microsoft_store?.download_url?r.channels.microsoft_store.version:(r.channels?.microsoft_store?.status||"Not submitted");
       $("update-status").textContent=r.update_service?.status||"Connected";
     }
   }catch(_){}
