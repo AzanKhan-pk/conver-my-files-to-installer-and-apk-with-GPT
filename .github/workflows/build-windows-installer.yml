@@ -67,7 +67,7 @@ jobs:
         shell: pwsh
         run: |
           python -m pip install Pillow
-          python -c "from PIL import Image; im=Image.open('installer/savevido-installer-logo.png').convert('RGB'); im.resize((55,55), Image.Resampling.LANCZOS).save('installer/savevido-installer-logo.bmp')"
+          python -c "from PIL import Image; im=Image.open('static/icon-512.png').convert('RGB'); im.resize((55,55), Image.Resampling.LANCZOS).save('installer/savevido-installer-logo.bmp')"
 
       - name: Compile installer
         shell: pwsh
