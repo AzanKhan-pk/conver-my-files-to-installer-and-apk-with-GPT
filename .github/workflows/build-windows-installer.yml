@@ -73,25 +73,6 @@ jobs:
           }
           if (Test-Path -LiteralPath $qmlDir) { throw "Unused Qt QML payload could not be removed: $qmlDir" }
 
-      - name: Remove unused Qt translation catalogs
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = "Stop"
-          $qtRoot = Join-Path $env:GITHUB_WORKSPACE "dist\\SaveVido\\_internal\\PySide6"
-          if (-not (Test-Path -LiteralPath $qtRoot -PathType Container)) {
-            throw "Expected PySide6 runtime folder is missing: $qtRoot"
-          }
-          # The desktop UI ships in English. Qt translation catalogs are not
-          # required to render the WebEngine interface or run the downloader.
-          $translationDirs = Get-ChildItem -LiteralPath $qtRoot -Directory -Recurse -Force |
-            Where-Object { $_.Name -eq "translations" } |
-            Sort-Object { $_.FullName.Length } -Descending
-          foreach ($dir in $translationDirs) {
-            Write-Host "Removing optional Qt translation catalogs: $($dir.FullName)"
-            Remove-Item -LiteralPath $dir.FullName -Recurse -Force
-          }
-          Write-Host ("Removed {0} optional Qt translation directory/directories." -f $translationDirs.Count)
-
       - name: Bundle FFmpeg
         shell: pwsh
         run: |
