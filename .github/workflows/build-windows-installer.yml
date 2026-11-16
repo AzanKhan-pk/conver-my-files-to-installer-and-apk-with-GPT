@@ -80,25 +80,28 @@ jobs:
         run: |
           $root = $env:GITHUB_WORKSPACE
           $releaseDir = Join-Path $root "release"
-          $distDir = Join-Path $root "dist\\SaveVido"
-          $issFile = Join-Path $root "installer\\SaveVido.iss"
-          $iconFile = Join-Path $root "static\\savevido.ico"
-          $wizardImage = Join-Path $root "installer\\savevido-installer-logo.bmp"
+          $distDir = Join-Path $root "dist\SaveVido"
+          $issDir = Join-Path $root "installer"
+          $issFile = Join-Path $issDir "SaveVido.iss"
+          $iconFile = Join-Path $root "static\savevido.ico"
+          $wizardImage = Join-Path $issDir "savevido-installer-logo.bmp"
+          $appExe = Join-Path $distDir "SaveVido.exe"
 
           New-Item -ItemType Directory -Force $releaseDir | Out-Null
-          foreach ($required in @($distDir, $issFile, $iconFile, $wizardImage)) {
+          foreach ($required in @($distDir, $issFile, $iconFile, $wizardImage, $appExe)) {
             if (-not (Test-Path -LiteralPath $required)) {
               throw "Required installer input is missing: $required"
             }
           }
-          $payload = Get-ChildItem -LiteralPath $distDir -Force
-          if (-not $payload) { throw "PyInstaller output folder is empty: $distDir" }
+          if (-not (Get-ChildItem -LiteralPath $distDir -Force)) {
+            throw "PyInstaller output folder is empty: $distDir"
+          }
 
           $compiler = @(
-            "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe",
-            "C:\\Program Files (x86)\\Inno Setup 7\\ISCC.exe",
-            "C:\\Program Files\\Inno Setup 6\\ISCC.exe",
-            "C:\\Program Files\\Inno Setup 7\\ISCC.exe"
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 7\ISCC.exe"
           ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           if (-not $compiler) { throw "ISCC.exe not found in the standard Inno Setup locations." }
 
@@ -106,9 +109,15 @@ jobs:
           Write-Host "Repository root: $root"
           Write-Host "Compiler: $compiler"
           Write-Host "Script: $issFile"
-          Write-Host "Output: $releaseDir\\SaveVido-Setup.exe"
-          & $compiler "/DAppVersion=$version" $issFile
-          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
+          Write-Host "Output: $(Join-Path $releaseDir 'SaveVido-Setup.exe')"
+          Push-Location $issDir
+          try {
+            & $compiler "/DAppVersion=$version" "SaveVido.iss"
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            Pop-Location
+          }
 
           $installer = Join-Path $releaseDir "SaveVido-Setup.exe"
           if (-not (Test-Path -LiteralPath $installer)) { throw "Installer output was not created: $installer" }
