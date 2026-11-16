@@ -72,6 +72,7 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force "release" | Out-Null
           $compiler = @("C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 7\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
           if (-not $compiler) { throw "ISCC.exe not found." }
           & $compiler "installer\SaveVido.iss"
