@@ -1328,7 +1328,34 @@ def index():
             "INSERT INTO visits(created_at) VALUES (?)",
             (now_iso(),),
         )
-    return render_template("index.html")
+    response = send_file(
+        BASE_DIR / "platform" / "index.html",
+        mimetype="text/html",
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
+
+
+@app.get("/release-config.json")
+def release_config():
+    response = send_from_directory(
+        BASE_DIR / "platform",
+        "release-config.json",
+        mimetype="application/json",
+        max_age=0,
+    )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
+
+
+@app.get("/platform/<path:filename>")
+def platform_asset(filename):
+    return send_from_directory(
+        BASE_DIR / "platform",
+        filename,
+        max_age=0,
+    )
 
 
 @app.route("/privacy")
