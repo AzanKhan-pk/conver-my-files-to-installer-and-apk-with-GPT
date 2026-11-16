@@ -26,6 +26,8 @@ AppPublisher={#AppPublisher}
 SetupIconFile={#RepoRoot}\static\savevido.ico
 Uninstallable=yes
 CloseApplications=yes
+CloseApplicationsFilter=SaveVido.exe
+RestartApplications=no
 DefaultDirName={localappdata}\Programs\SaveVido
 DefaultGroupName={#AppName}
 DisableProgramGroupPage=yes
@@ -52,6 +54,9 @@ Source: "{#RepoRoot}\dist\SaveVido\*"; DestDir: "{app}"; Flags: ignoreversion re
 [Icons]
 Name: "{group}\SaveVido"; Filename: "{app}\{#AppExeName}"
 Name: "{autodesktop}\SaveVido"; Filename: "{app}\{#AppExeName}"; Tasks: desktopicon
+
+[UninstallRun]
+Filename: "{sys}\\taskkill.exe"; Parameters: "/F /T /IM SaveVido.exe"; Flags: runhidden; RunOnceId: "StopSaveVido"
 
 [Run]
 Filename: "{app}\{#AppExeName}"; Description: "Launch SaveVido"; Flags: postinstall nowait skipifsilent
