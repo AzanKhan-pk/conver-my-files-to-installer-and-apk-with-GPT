@@ -56,7 +56,7 @@ jobs:
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           @{ version = $version } | ConvertTo-Json | Set-Content -Path "build_info.json" -Encoding utf8
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --add-data "build_info.json;." --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6.QtWebEngineCore --collect-all PySide6.QtWebEngineWidgets --collect-all shiboken6 desktop_launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --add-data "build_info.json;." --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all shiboken6 desktop_launcher.py
           if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed with exit code $LASTEXITCODE." }
           $webEngineModule = Get-ChildItem "dist\SaveVido" -Filter "QtWebEngineWidgets*.pyd" -Recurse | Select-Object -First 1
           if (-not $webEngineModule) { throw "PySide6.QtWebEngineWidgets was not bundled. Refusing to create a broken installer." }
@@ -179,4 +179,11 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add platform/release-config.json
           git commit -m "chore: publish SaveVido $version release manifest"
+
+          # Rebase the manifest commit onto the latest branch tip to avoid
+          # rejecting the push when another workflow/user updated the branch.
+          git fetch origin "$env:GITHUB_REF_NAME"
+          git rebase "origin/$env:GITHUB_REF_NAME"
+          if ($LASTEXITCODE -ne 0) { throw "Manifest rebase failed; refusing to force-push or overwrite remote changes." }
+
           git push origin "HEAD:$env:GITHUB_REF_NAME"
