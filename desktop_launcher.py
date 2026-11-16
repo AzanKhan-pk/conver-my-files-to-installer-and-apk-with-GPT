@@ -61,7 +61,7 @@ APP_VERSION = read_app_version()
 
 
 def version_tuple(value):
-    parts = re.findall(r"\\d+", str(value))
+    parts = re.findall(r"\d+", str(value))
     return tuple(int(part) for part in parts) if parts else (0,)
 
 
