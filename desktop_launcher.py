@@ -114,7 +114,7 @@ class SaveVidoWindow(QMainWindow):
 
         self.browser = QWebEngineView(self)
         self.browser.setContextMenuPolicy(Qt.ContextMenuPolicy.DefaultContextMenu)
-        self.browser.setUrl(QUrl(APP_URL))
+        self.browser.setUrl(QUrl(f"{APP_URL}/?desktop=1"))
         self.setCentralWidget(self.browser)
 
     def closeEvent(self, event):
