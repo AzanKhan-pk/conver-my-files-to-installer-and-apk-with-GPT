@@ -482,6 +482,15 @@ function formatBytes(bytes) {
 }
 
 function createDownloadPanel(jobId, title) {
+  const activityList = $("#downloadActivityList");
+  const existingPanel = activityList?.querySelector(`.download-progress-panel[data-job-id="${CSS.escape(jobId)}"]`);
+  if (existingPanel) {
+    const existingTitle = existingPanel.querySelector(".download-progress-title");
+    if (existingTitle && title) existingTitle.textContent = title;
+    showRunningControls(existingPanel);
+    return existingPanel;
+  }
+
   const panel = document.createElement("div");
   panel.className = "download-progress-panel";
   panel.dataset.jobId = jobId;
@@ -503,7 +512,6 @@ function createDownloadPanel(jobId, title) {
     <div data-role="message" class="download-progress-message">Preparing download...</div>
   `;
 
-  const activityList = $("#downloadActivityList");
   (activityList || $("#downloadBtn").parentElement).appendChild(panel);
 
   panel.querySelector('[data-action="pause"]').addEventListener("click", () =>
@@ -929,6 +937,9 @@ historyList?.addEventListener("click", async (event) => {
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not resume download.");
       const panel = createDownloadPanel(jobId, itemElement?.querySelector(".history-item-heading strong")?.textContent || "Resuming download...");
+      // Close the history drawer so the restored live progress panel is visible.
+      setHistoryOpen(false);
+      panel.scrollIntoView({ behavior: "auto", block: "center" });
       const statusResponse = await fetch(`/api/download/${encodeURIComponent(jobId)}/status`);
       const statusData = await statusResponse.json();
       if (statusResponse.ok && statusData.ok) {
@@ -941,6 +952,7 @@ historyList?.addEventListener("click", async (event) => {
           formatBytes(job.speed || 0)
         );
       }
+      showRunningControls(panel);
       setDownloadProgressMessage(panel, "Resuming from saved progress...");
       const media = {
         title: itemElement?.querySelector(".history-item-heading strong")?.textContent || "video",
