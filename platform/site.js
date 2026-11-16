@@ -50,7 +50,7 @@ async function loadPlatformData(){
       const winLink=$("windows-download");
       if(winLink&&win.download_url){
         winLink.href=win.download_url;winLink.textContent="Download Windows installer";
-        winLink.removeAttribute("aria-disabled");winLink.setAttribute("download","");
+        winLink.removeAttribute("aria-disabled");
       }
     }
   }catch(_){}
