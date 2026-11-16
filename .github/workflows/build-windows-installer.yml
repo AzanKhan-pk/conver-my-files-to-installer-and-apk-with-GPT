@@ -78,17 +78,43 @@ jobs:
       - name: Compile installer
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force "release" | Out-Null
-          $compiler = @("C:\Program Files (x86)\Inno Setup 6\ISCC.exe", "C:\Program Files (x86)\Inno Setup 7\ISCC.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
-          if (-not $compiler) { throw "ISCC.exe not found." }
-          $version = "1.0.$env:GITHUB_RUN_NUMBER"
-          Push-Location "installer"
-          try {
-            & $compiler "/DAppVersion=$version" "SaveVido.iss"
-            if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed." }
+          $root = $env:GITHUB_WORKSPACE
+          $releaseDir = Join-Path $root "release"
+          $distDir = Join-Path $root "dist\\SaveVido"
+          $issFile = Join-Path $root "installer\\SaveVido.iss"
+          $iconFile = Join-Path $root "static\\savevido.ico"
+          $wizardImage = Join-Path $root "installer\\savevido-installer-logo.bmp"
+
+          New-Item -ItemType Directory -Force $releaseDir | Out-Null
+          foreach ($required in @($distDir, $issFile, $iconFile, $wizardImage)) {
+            if (-not (Test-Path -LiteralPath $required)) {
+              throw "Required installer input is missing: $required"
+            }
           }
-          finally { Pop-Location }
-          if (-not (Test-Path "release\SaveVido-Setup.exe")) { throw "Installer output was not created." }
+          $payload = Get-ChildItem -LiteralPath $distDir -Force
+          if (-not $payload) { throw "PyInstaller output folder is empty: $distDir" }
+
+          $compiler = @(
+            "C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe",
+            "C:\\Program Files (x86)\\Inno Setup 7\\ISCC.exe",
+            "C:\\Program Files\\Inno Setup 6\\ISCC.exe",
+            "C:\\Program Files\\Inno Setup 7\\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) { throw "ISCC.exe not found in the standard Inno Setup locations." }
+
+          $version = "1.0.$env:GITHUB_RUN_NUMBER"
+          Write-Host "Repository root: $root"
+          Write-Host "Compiler: $compiler"
+          Write-Host "Script: $issFile"
+          Write-Host "Output: $releaseDir\\SaveVido-Setup.exe"
+          & $compiler "/DAppVersion=$version" $issFile
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
+
+          $installer = Join-Path $releaseDir "SaveVido-Setup.exe"
+          if (-not (Test-Path -LiteralPath $installer)) { throw "Installer output was not created: $installer" }
+          $size = (Get-Item -LiteralPath $installer).Length
+          if ($size -lt 1000000) { throw "Installer output is unexpectedly small ($size bytes)." }
+          Write-Host "Installer compiled successfully: $installer ($size bytes)"
 
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
