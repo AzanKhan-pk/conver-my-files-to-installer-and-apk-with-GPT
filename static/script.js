@@ -302,17 +302,17 @@ fetchButton.addEventListener("click", async () => {
 
         // Only call gallery-dl for links likely to contain an image gallery.
         // Normal video links go directly to yt-dlp, avoiding a second slow request.
-        const isDirectImage = /\\.(jpe?g|png|webp|gif|avif)$/i.test(path);
+        const isDirectImage = /\.(jpe?g|png|webp|gif|avif)$/i.test(path);
         const isPinterestPin = isHostOrSubdomain("pinterest.com")
           || isHostOrSubdomain("pin.it");
         const isInstagramPost = isHostOrSubdomain("instagram.com")
-          && /^\\/p\\//.test(path);
+          && /^\/p\//.test(path);
         const isFacebookPhotoPost = (
           isHostOrSubdomain("facebook.com") || isHostOrSubdomain("fb.com")
-        ) && (/^\\/(photo|photos)\\//.test(path)
-          || /^\\/share\\/p\\//.test(path));
+        ) && (/^\/(photo|photos)\//.test(path)
+          || /^\/share\/p\//.test(path));
         const isTikTokPhotoPost = isHostOrSubdomain("tiktok.com")
-          && /^\\/photo\\//.test(path);
+          && /^\/photo\//.test(path);
 
         return isDirectImage || isPinterestPin || isInstagramPost
           || isFacebookPhotoPost || isTikTokPhotoPost;
