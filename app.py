@@ -1769,6 +1769,7 @@ def download_status(job_id):
             "platform": job.get("platform"),
             "quality": job.get("quality"),
             "file_type": job.get("file_type"),
+            "mode": job.get("mode"),
         },
     })
 
