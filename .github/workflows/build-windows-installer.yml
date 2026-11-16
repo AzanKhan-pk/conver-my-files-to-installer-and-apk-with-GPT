@@ -73,18 +73,6 @@ jobs:
           }
           if (Test-Path -LiteralPath $qmlDir) { throw "Unused Qt QML payload could not be removed: $qmlDir" }
 
-      - name: Bundle FFmpeg
-        shell: pwsh
-        run: |
-          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
-          Expand-Archive "$env:RUNNER_TEMP\ffmpeg.zip" "$env:RUNNER_TEMP\ffmpeg" -Force
-          $ffmpeg = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
-          $ffprobe = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
-          if (-not $ffmpeg -or -not $ffprobe) { throw "FFmpeg binaries were not found in the downloaded archive." }
-          New-Item -ItemType Directory -Force "dist\SaveVido\ffmpeg" | Out-Null
-          Copy-Item $ffmpeg.FullName "dist\SaveVido\ffmpeg\ffmpeg.exe"
-          Copy-Item $ffprobe.FullName "dist\SaveVido\ffmpeg\ffprobe.exe"
-
       - name: Report packaged component sizes
         shell: pwsh
         run: |
@@ -113,6 +101,18 @@ jobs:
           } else {
             throw "FFmpeg folder is missing after the bundle step."
           }
+
+      - name: Bundle FFmpeg
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
+          Expand-Archive "$env:RUNNER_TEMP\ffmpeg.zip" "$env:RUNNER_TEMP\ffmpeg" -Force
+          $ffmpeg = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
+          $ffprobe = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) { throw "FFmpeg binaries were not found in the downloaded archive." }
+          New-Item -ItemType Directory -Force "dist\SaveVido\ffmpeg" | Out-Null
+          Copy-Item $ffmpeg.FullName "dist\SaveVido\ffmpeg\ffmpeg.exe"
+          Copy-Item $ffprobe.FullName "dist\SaveVido\ffmpeg\ffprobe.exe"
 
       - name: Install Inno Setup
         shell: pwsh
