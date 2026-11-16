@@ -242,7 +242,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed." }
 
           $sha256 = (Get-FileHash "release/SaveVido-Setup.exe" -Algorithm SHA256).Hash.ToLower()
-          python -c "import json,sys; from datetime import datetime,timezone; p='platform/release-config.json'; d=json.load(open(p,encoding='utf-8')); v=sys.argv[1]; h=sys.argv[2]; d['current_version']=v; d['updated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'); d['update_service']['status']='Latest Windows release published automatically from GitHub commits.'; w=d['channels']['windows']; w['version']=v; w['status']='Available: latest verified Windows installer.'; w['sha256']=h; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2); print('Website manifest updated:',v)" $version $sha256
+          python -c "import json,sys,os; from datetime import datetime,timezone; p='platform/release-config.json'; d=json.load(open(p,encoding='utf-8')); v=sys.argv[1]; h=sys.argv[2]; d['current_version']=v; d['updated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'); d['update_service']['status']='Latest Windows release published automatically from GitHub commits.'; w=d['channels']['windows']; w['version']=v; w['status']='Available: latest verified Windows installer.'; w['download_url']='https://github.com/'+os.getenv('GITHUB_REPOSITORY','AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT')+'/releases/download/v'+v+'/SaveVido-Setup.exe'; w['sha256']=h; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2); print('Website manifest updated:',v)" $version $sha256
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
