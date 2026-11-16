@@ -1,3 +1,8 @@
+// The native Qt desktop build uses a lighter rendering profile for older PCs.
+if (new URLSearchParams(window.location.search).has("desktop")) {
+  document.documentElement.classList.add("savevido-desktop");
+}
+
 const $ = (selector) => document.querySelector(selector);
 
 const urlInput = $("#url");
