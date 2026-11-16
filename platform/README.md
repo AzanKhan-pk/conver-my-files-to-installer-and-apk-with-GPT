@@ -48,3 +48,13 @@ The repository currently contains a Flask application and a Vercel rewrite. The 
 ## Non-destructive rule
 
 Do not replace or reformat the existing downloader templates, CSS, JavaScript, Flask routes, or extraction logic as part of this foundation. New platform functionality belongs in new files or isolated modules. Any future integration into existing files must be reviewed separately before it is merged.
+
+
+## Analytics API (deployed)
+
+- `POST /api/track` records anonymous website page views and refreshes a short-lived session heartbeat. It accepts only `page_view` and `app_open`; it does not accept client-submitted download-success events.
+- `GET /api/metrics` returns verified download deliveries, active anonymous sessions (last 5 minutes), verified ratings, and the last 14 days of downloads.
+- Vercel stores `DATABASE_URL` as an encrypted environment variable. The browser never receives database credentials.
+- Session identifiers are random browser-local IDs; only SHA-256 hashes are stored. Raw IP addresses and personal profile information are not collected.
+- Successful downloads remain at zero until a real artifact-serving route records the completed file response. A button click is not counted as a download.
+- Ratings remain empty until a rating submission flow with abuse controls is implemented.
