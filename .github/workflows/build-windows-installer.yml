@@ -39,7 +39,7 @@ jobs:
       - name: Build SaveVido desktop application
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --add-data "templates;templates" --add-data "static;static" --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --hidden-import pystray._win32 desktop_launcher.py
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --add-data "templates;templates" --add-data "static;static" --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all PySide6 --collect-all shiboken6 desktop_launcher.py
 
       - name: Bundle FFmpeg
         shell: pwsh
