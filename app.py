@@ -8,6 +8,7 @@ import sqlite3
 import json
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -165,6 +166,7 @@ ALLOWED_HOSTS = {
 
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
+JOB_LAST_PERSISTED = {}
 
 FFMPEG_PATH = (
     os.getenv("FFMPEG_PATH")
@@ -1110,7 +1112,7 @@ def get_job(job_id):
     return job
 
 
-def update_job(job_id, **values):
+def update_job(job_id, persist=True, **values):
     with DOWNLOAD_JOBS_LOCK:
         job = DOWNLOAD_JOBS.get(job_id)
         if job:
@@ -1118,8 +1120,9 @@ def update_job(job_id, **values):
             snapshot = dict(job)
         else:
             snapshot = None
-    if snapshot:
+    if snapshot and persist:
         save_job_state(snapshot)
+        JOB_LAST_PERSISTED[job_id] = time.monotonic()
 
 
 def cleanup_job_files(job):
@@ -1144,8 +1147,19 @@ def progress_hook(job_id):
                 or 0
             )
             percent = downloaded / total * 100 if total else 0
+            # A resumed yt-dlp transfer can report a fresh fragment counter.
+            # Never let the visible progress move backwards from the saved state.
+            downloaded = max(downloaded, int(job.get("downloaded_bytes") or 0))
+            total = total or int(job.get("total_bytes") or 0)
+            percent = max(
+                float(job.get("percent") or 0),
+                downloaded / total * 100 if total else 0,
+            )
+            now = time.monotonic()
+            persist = now - JOB_LAST_PERSISTED.get(job_id, 0) >= 2.0
             update_job(
                 job_id,
+                persist=persist,
                 status="downloading",
                 downloaded_bytes=downloaded,
                 total_bytes=total,
@@ -1242,7 +1256,9 @@ def run_download_job(job_id):
 
         update_job(job_id, status="downloading")
         with yt_dlp.YoutubeDL(options) as ydl:
-            downloaded_info = ydl.extract_info(url, download=True)
+            # Reuse the metadata already fetched above instead of asking the
+            # source for the same page a second time (often a costly request).
+            downloaded_info = ydl.process_ie_result(info, download=True)
 
         final_path, final_size = find_output_file(temp_dir, mode)
         title = downloaded_info.get("title") or title
@@ -1820,7 +1836,17 @@ def cancel_download(job_id):
             "error": "Download job not found.",
         }), 404
 
-    update_job(job_id, cancel_requested=True)
+    if job.get("status") in {"paused", "network_error"}:
+        update_job(
+            job_id,
+            status="cancelled",
+            cancel_requested=False,
+            pause_requested=False,
+            speed=0,
+        )
+        cleanup_job_files(job)
+    else:
+        update_job(job_id, cancel_requested=True)
     return jsonify({"ok": True})
 
 
