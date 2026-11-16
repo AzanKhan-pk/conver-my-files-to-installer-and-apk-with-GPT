@@ -306,7 +306,7 @@ fetchButton.addEventListener("click", async () => {
         const isPinterestPin = isHostOrSubdomain("pinterest.com")
           || isHostOrSubdomain("pin.it");
         const isInstagramPost = isHostOrSubdomain("instagram.com")
-          && /^\\/(p|reel|tv)\\//.test(path);
+          && /^\\/p\\//.test(path);
         const isFacebookPhotoPost = (
           isHostOrSubdomain("facebook.com") || isHostOrSubdomain("fb.com")
         ) && (/^\\/(photo|photos)\\//.test(path)
@@ -533,7 +533,7 @@ async function controlDownload(panel, jobId, action) {
 
 async function monitorDownload(jobId, panel, media) {
   while (panel.isConnected) {
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 1500));
     const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/status`);
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Could not read download status.");
