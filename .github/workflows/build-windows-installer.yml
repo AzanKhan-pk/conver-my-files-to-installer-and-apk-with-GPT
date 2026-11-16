@@ -76,14 +76,46 @@ jobs:
       - name: Bundle FFmpeg
         shell: pwsh
         run: |
-          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "$env:RUNNER_TEMP\ffmpeg.zip"
-          Expand-Archive "$env:RUNNER_TEMP\ffmpeg.zip" "$env:RUNNER_TEMP\ffmpeg" -Force
-          $ffmpeg = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
-          $ffprobe = Get-ChildItem "$env:RUNNER_TEMP\ffmpeg" -Filter "ffprobe.exe" -Recurse | Select-Object -First 1
-          if (-not $ffmpeg -or -not $ffprobe) { throw "FFmpeg binaries were not found in the downloaded archive." }
-          New-Item -ItemType Directory -Force "dist\SaveVido\ffmpeg" | Out-Null
-          Copy-Item $ffmpeg.FullName "dist\SaveVido\ffmpeg\ffmpeg.exe"
-          Copy-Item $ffprobe.FullName "dist\SaveVido\ffmpeg\ffprobe.exe"
+          $ErrorActionPreference = "Stop"
+          $workspace = $env:GITHUB_WORKSPACE
+          $archive = Join-Path $env:RUNNER_TEMP "savevido-ffmpeg.zip"
+          $extractRoot = Join-Path $env:RUNNER_TEMP "savevido-ffmpeg-extracted"
+          $appRoot = Join-Path $workspace "dist\SaveVido"
+          $ffmpegDir = Join-Path $appRoot "ffmpeg"
+
+          if (-not (Test-Path -LiteralPath $appRoot -PathType Container)) {
+            throw "PyInstaller application folder is missing: $appRoot"
+          }
+
+          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $archive
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw "FFmpeg archive download did not create: $archive"
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+
+          $ffmpeg = Get-ChildItem -LiteralPath $extractRoot -Filter "ffmpeg.exe" -File -Recurse | Select-Object -First 1
+          $ffprobe = Get-ChildItem -LiteralPath $extractRoot -Filter "ffprobe.exe" -File -Recurse | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) {
+            throw "FFmpeg binaries were not found in the downloaded archive. Extracted to: $extractRoot"
+          }
+
+          New-Item -ItemType Directory -Path $ffmpegDir -Force | Out-Null
+          Copy-Item -LiteralPath $ffmpeg.FullName -Destination (Join-Path $ffmpegDir "ffmpeg.exe") -Force
+          Copy-Item -LiteralPath $ffprobe.FullName -Destination (Join-Path $ffmpegDir "ffprobe.exe") -Force
+
+          foreach ($binary in @("ffmpeg.exe", "ffprobe.exe")) {
+            $target = Join-Path $ffmpegDir $binary
+            if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+              throw "FFmpeg bundle copy failed; required file is missing: $target"
+            }
+            if ((Get-Item -LiteralPath $target).Length -le 0) {
+              throw "FFmpeg bundle copy produced an empty file: $target"
+            }
+          }
+          Write-Host "Verified FFmpeg bundle directory: $ffmpegDir"
+          Get-ChildItem -LiteralPath $ffmpegDir -File | ForEach-Object {
+            Write-Host ("{0:N1} MB | {1}" -f ($_.Length / 1MB), $_.Name)
+          }
 
       - name: Report packaged component sizes
         shell: pwsh
