@@ -46,7 +46,11 @@ DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=str(BASE_DIR / "templates"),
+    static_folder=str(BASE_DIR / "static"),
+)
 app.config["SECRET_KEY"] = os.getenv(
     "SECRET_KEY", "change-this-secret-key"
 )
