@@ -300,35 +300,22 @@ fetchButton.addEventListener("click", async () => {
         const isHostOrSubdomain = (domain) =>
           host === domain || host.endsWith("." + domain);
 
-        // Try gallery extraction on every safe, supported image-capable host.
-        // Video-only URLs simply fall back to the existing yt-dlp flow.
-        const supportedImageSites = [
-          "tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
-          "pinterest.com", "pin.it", "x.com", "twitter.com", "reddit.com", "redd.it",
-          "youtube.com", "youtube-nocookie.com", "youtu.be",
-          "vimeo.com", "dailymotion.com", "dai.ly",
-          "twitch.tv", "soundcloud.com", "snd.sc",
-          "bilibili.com", "b23.tv", "imgur.com",
-          "postimg.cc", "postimages.org", "imageshack.com",
-          "i.pinimg.com", "images.pinimg.com", "fbcdn.net", "fbsbx.com",
-          "cdninstagram.com", "tiktokcdn.com", "tiktokv.com",
-          "byteoversea.com", "twimg.com", "redditmedia.com",
-          "ytimg.com", "vimeocdn.com", "dmcdn.net",
-          "ttvnw.net", "jtvnw.net", "twitchcdn.net", "sndcdn.com",
-          "hdslb.com", "cloudinary.com", "cloudfront.net",
-          "images.unsplash.com"
-        ];
+        // Only call gallery-dl for links likely to contain an image gallery.
+        // Normal video links go directly to yt-dlp, avoiding a second slow request.
+        const isDirectImage = /\\.(jpe?g|png|webp|gif|avif)$/i.test(path);
+        const isPinterestPin = isHostOrSubdomain("pinterest.com")
+          || isHostOrSubdomain("pin.it");
+        const isInstagramPost = isHostOrSubdomain("instagram.com")
+          && /^\\/(p|reel|tv)\\//.test(path);
+        const isFacebookPhotoPost = (
+          isHostOrSubdomain("facebook.com") || isHostOrSubdomain("fb.com")
+        ) && (/^\\/(photo|photos)\\//.test(path)
+          || /^\\/share\\/p\\//.test(path));
+        const isTikTokPhotoPost = isHostOrSubdomain("tiktok.com")
+          && /^\\/photo\\//.test(path);
 
-        // TikTok video links must go straight to yt-dlp. Sending every
-        // TikTok URL through gallery-dl first adds a second slow request
-        // before the actual video metadata lookup.
-        const isTikTokVideo = isHostOrSubdomain("tiktok.com")
-          && /\/video\/\d+/.test(path);
-        if (isTikTokVideo) return false;
-
-        // Keep direct image URLs and TikTok photo posts eligible for gallery extraction.
-        return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
-          || supportedImageSites.some(isHostOrSubdomain);
+        return isDirectImage || isPinterestPin || isInstagramPost
+          || isFacebookPhotoPost || isTikTokPhotoPost;
       } catch (_) {
         return false;
       }
