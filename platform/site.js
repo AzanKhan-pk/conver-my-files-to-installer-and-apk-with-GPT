@@ -38,10 +38,20 @@ async function loadPlatformData(){
     const releaseRes=await fetch("./release-config.json",{cache:"no-store"});
     if(releaseRes.ok){
       const r=await releaseRes.json();
-      $("windows-version").textContent=r.channels?.windows?.download_url?r.channels.windows.version:(r.channels?.windows?.status||"Not published");
-      $("android-version").textContent=r.channels?.android?.download_url?r.channels.android.version:(r.channels?.android?.status||"In development");
-      $("store-version").textContent=r.channels?.microsoft_store?.download_url?r.channels.microsoft_store.version:(r.channels?.microsoft_store?.status||"Not submitted");
+      const channels=r.channels||{};
+      const win=channels.windows||{}, android=channels.android||{}, store=channels.microsoft_store||{};
+      $("windows-version").textContent=win.version||win.status||"Not published";
+      $("android-version").textContent=android.version||android.status||"In development";
+      $("store-version").textContent=store.version||store.status||"Not submitted";
       $("update-status").textContent=r.update_service?.status||"Connected";
+      if($("windows-status"))$("windows-status").textContent=win.status||"Not published";
+      if($("android-status"))$("android-status").textContent=android.status||"In development";
+      if($("store-status"))$("store-status").textContent=store.status||"Not submitted";
+      const winLink=$("windows-download");
+      if(winLink&&win.download_url){
+        winLink.href=win.download_url;winLink.textContent="Download Windows installer";
+        winLink.removeAttribute("aria-disabled");winLink.setAttribute("download","");
+      }
     }
   }catch(_){}
 }
