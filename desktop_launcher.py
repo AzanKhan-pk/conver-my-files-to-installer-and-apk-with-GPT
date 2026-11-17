@@ -29,7 +29,9 @@ ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
 
 def read_app_version():
     try:
-        return str(json.loads((RESOURCE_ROOT / "build_info.json").read_text(encoding="utf-8-sig")).get("version") or "0.0.0")
+        external = APP_ROOT / "build_info.json"
+        version_file = external if external.is_file() else RESOURCE_ROOT / "build_info.json"
+        return str(json.loads(version_file.read_text(encoding="utf-8-sig")).get("version") or "0.0.0")
     except Exception:
         return "0.0.0"
 
