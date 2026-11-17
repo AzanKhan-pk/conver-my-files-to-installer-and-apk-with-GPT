@@ -1215,8 +1215,8 @@ def find_output_file(temp_dir, mode):
 
 def make_saved_filename(title, extension):
     """Keep the source's real title and add a small SaveVido attribution."""
-    clean_title = re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', "_", str(title or "video"))
-    clean_title = re.sub(r"\\s+", " ", clean_title).strip(" .")[:150].rstrip(" .")
+    clean_title = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(title or "video"))
+    clean_title = re.sub(r"\s+", " ", clean_title).strip(" .")[:150].rstrip(" .")
     if not clean_title:
         clean_title = "video"
     if clean_title.upper() in {"CON", "PRN", "AUX", "NUL"} or re.fullmatch(r"(COM|LPT)[1-9]", clean_title.upper()):
