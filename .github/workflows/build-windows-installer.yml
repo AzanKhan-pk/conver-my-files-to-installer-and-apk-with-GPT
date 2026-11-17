@@ -301,8 +301,10 @@ jobs:
             $patchUrl = ""
           }
           $fileEntries = @($current.Keys | Sort-Object | ForEach-Object { [ordered]@{ path = $_; sha256 = $current[$_] } })
+          $baseVersion = if ($previous -and $previous.version) { [string]$previous.version } else { "" }
           $manifest = [ordered]@{
             version = $version
+            base_version = $baseVersion
             patch_url = $patchUrl
             patch_sha256 = $patchHash
             files = $fileEntries
