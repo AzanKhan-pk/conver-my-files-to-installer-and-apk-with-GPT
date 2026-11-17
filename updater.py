@@ -35,6 +35,8 @@ def main() -> int:
     parser.add_argument("--manifest-url", required=True)
     parser.add_argument("--app-root", required=True)
     parser.add_argument("--restart", action="store_true")
+    parser.add_argument("--wait-pid", type=int, default=0)
+    parser.add_argument("--status-file", default="")
     args = parser.parse_args()
 
     root = Path(args.app_root).resolve()
@@ -46,7 +48,41 @@ def main() -> int:
     created = []
     deleted_backups = []
 
+    def write_status(status: str, message: str = "", version: str = "") -> None:
+        if not args.status_file:
+            return
+        try:
+            status_path = Path(args.status_file)
+            status_path.parent.mkdir(parents=True, exist_ok=True)
+            status_path.write_text(json.dumps({
+                "status": status, "message": message, "version": version,
+            }), encoding="utf-8")
+        except Exception:
+            pass
+
+    def wait_for_parent() -> None:
+        if not args.wait_pid:
+            return
+        if sys.platform == "win32":
+            import ctypes
+            kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+            kernel32.OpenProcess.restype = ctypes.c_void_p
+            handle = kernel32.OpenProcess(0x00100000, False, args.wait_pid)
+            if handle:
+                try:
+                    result = kernel32.WaitForSingleObject(handle, 120000)
+                    if result == 0x00000102:
+                        raise TimeoutError("SaveVido did not close in time. Please close it and try again.")
+                finally:
+                    kernel32.CloseHandle(handle)
+            else:
+                # The parent may already have exited before this helper started.
+                time.sleep(1)
+        else:
+            time.sleep(2)
+
     try:
+        wait_for_parent()
         manifest_file = temp / "manifest.json"
         fetch(args.manifest_url, manifest_file)
         manifest = json.loads(manifest_file.read_text(encoding="utf-8-sig"))
@@ -125,11 +161,18 @@ def main() -> int:
                     target.unlink()
             raise
 
+        write_status("installed", version=version)
         if args.restart and exe.exists():
             subprocess.Popen([str(exe)], cwd=str(root), close_fds=True)
         return 0
 
     except Exception as exc:
+        write_status("failed", message=str(exc))
+        if args.restart and exe.exists():
+            try:
+                subprocess.Popen([str(exe)], cwd=str(root), close_fds=True)
+            except Exception:
+                pass
         try:
             import ctypes
             ctypes.windll.user32.MessageBoxW(
