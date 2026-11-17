@@ -187,9 +187,6 @@ def main():
     qt_app.setApplicationName("SaveVido")
     qt_app.setQuitOnLastWindowClosed(False)
     if ICON_PATH.is_file(): qt_app.setWindowIcon(QIcon(str(ICON_PATH)))
-    checker = UpdateChecker(qt_app)
-    window = SaveVidoWindow(checker, qt_app)
-
     # Ask once. The default choice is Decline; the owner token is never present here.
     consent_file = Path(savevido_app.APP_DATA_DIR) / "telemetry-consent.json"
     consent = None
@@ -199,7 +196,7 @@ def main():
         consent = None
     if consent is None:
         choice = QMessageBox.question(
-            window, "SaveVido privacy choice",
+            None, "SaveVido privacy choice",
             "Would you like to share anonymous app-open and download success/failure events, app version, file type and source website hostname to help improve SaveVido? The service may estimate country/city from network metadata. It does not receive your raw IP, full media URL, file name or downloaded file. Choose No to disable analytics.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
@@ -214,6 +211,8 @@ def main():
         savevido_app.send_telemetry("app_open")
 
     server_thread.start()
+    checker = UpdateChecker(qt_app)
+    window = SaveVidoWindow(checker, qt_app)
     if QSystemTrayIcon.isSystemTrayAvailable():
         tray = QSystemTrayIcon(QIcon(str(ICON_PATH)), qt_app)
         tray.setToolTip("SaveVido — Video Downloader")
