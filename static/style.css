@@ -868,3 +868,30 @@ html.savevido-desktop *::before,
 html.savevido-desktop *::after {
   scroll-behavior: auto !important;
 }
+
+
+/* Desktop-only incremental update panel; website layout remains unchanged. */
+#savevidoUpdatePanel[hidden] { display:none !important; }
+#savevidoUpdatePanel {
+  position:fixed; inset:0; z-index:1000; display:grid; place-items:center;
+  padding:20px; background:rgba(3,5,12,.76);
+}
+.savevido-update-card {
+  position:relative; width:min(440px,100%); padding:28px;
+  border:1px solid var(--line-bright); border-radius:14px;
+  background:var(--surface); color:var(--ink); box-shadow:0 24px 80px rgba(0,0,0,.5);
+}
+.savevido-update-card h2 { margin:8px 0 12px; font-size:24px; }
+.savevido-update-card p { color:var(--muted); line-height:1.65; }
+.savevido-update-details { font-size:12px; }
+.savevido-update-close {
+  position:absolute; top:12px; right:12px; width:34px; height:34px;
+  border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer;
+}
+#savevidoInstallUpdate {
+  margin-top:12px; padding:12px 18px; border:1px solid var(--lime);
+  border-radius:7px; background:var(--lime); color:var(--void);
+  font-weight:800; cursor:pointer;
+}
+#savevidoInstallUpdate:disabled { opacity:.6; cursor:wait; }
+html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
