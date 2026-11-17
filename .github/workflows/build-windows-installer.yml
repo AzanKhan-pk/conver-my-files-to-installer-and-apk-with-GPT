@@ -246,15 +246,26 @@ jobs:
             $current[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
           }
           $previous = $null
+          # Check assets before downloading: legacy releases do not have updater manifests.
+          $priorErrorAction = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
           $previousTag = gh release list --repo "$env:GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName'
-          if ($LASTEXITCODE -eq 0 -and $previousTag) {
-            $previousDir = Join-Path $env:RUNNER_TEMP "savevido-previous"
-            New-Item -ItemType Directory -Force $previousDir | Out-Null
-            gh release download $previousTag --repo "$env:GITHUB_REPOSITORY" --pattern "SaveVido-Update-Manifest.json" --dir $previousDir
-            if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $previousDir "SaveVido-Update-Manifest.json"))) {
-              $previous = Get-Content (Join-Path $previousDir "SaveVido-Update-Manifest.json") -Raw | ConvertFrom-Json
+          $listExit = $LASTEXITCODE
+          if ($listExit -eq 0 -and $previousTag) {
+            $assetNames = @(gh release view $previousTag --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+            $viewExit = $LASTEXITCODE
+            if ($viewExit -eq 0 -and ($assetNames -contains "SaveVido-Update-Manifest.json")) {
+              $previousDir = Join-Path $env:RUNNER_TEMP "savevido-previous"
+              New-Item -ItemType Directory -Force $previousDir | Out-Null
+              gh release download $previousTag --repo "$env:GITHUB_REPOSITORY" --pattern "SaveVido-Update-Manifest.json" --dir $previousDir
+              if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $previousDir "SaveVido-Update-Manifest.json"))) {
+                $previous = Get-Content (Join-Path $previousDir "SaveVido-Update-Manifest.json") -Raw | ConvertFrom-Json
+              }
+            } else {
+              Write-Host "Previous release has no updater manifest; treating this as the bootstrap release."
             }
           }
+          $ErrorActionPreference = $priorErrorAction
           $changed = @()
           $deleted = @()
           if ($previous -and $previous.files) {
@@ -272,11 +283,16 @@ jobs:
               Copy-Item $source $target -Force
             }
             if ($changed.Count -eq 0) {
-              $target = Join-Path $stage ($relative.Replace([char]47,[char]92))
-              Copy-Item (Join-Path $root "build_info.json") $target -Force
-              $changed = @("build_info.json")
+              $relative = "build_info.json"
+              $source = Join-Path $root $relative
+              if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "No files changed and build_info.json is missing; cannot create a valid update package."
+              }
+              $target = Join-Path $stage $relative
+              Copy-Item -LiteralPath $source -Destination $target -Force
+              $changed = @($relative)
             }
-            Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipPath -CompressionLevel Optimal -Force
+                      Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipPath -CompressionLevel Optimal -Force
             $patchHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
             $patchUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/SaveVido-Update.zip"
           } else {
