@@ -368,10 +368,42 @@ jobs:
           git add platform/release-config.json
           git commit -m "chore: publish SaveVido $version release manifest"
 
-          # Rebase the manifest commit onto the latest branch tip to avoid
-          # rejecting the push when another workflow/user updated the branch.
-          git fetch origin "$env:GITHUB_REF_NAME"
-          git rebase "origin/$env:GITHUB_REF_NAME"
-          if ($LASTEXITCODE -ne 0) { throw "Manifest rebase failed; refusing to force-push or overwrite remote changes." }
+          # Publish only the manifest change on top of the newest branch tip.
+          # If another workflow updates the branch at the same time, retry from
+          # that new tip and reapply this release's version/hash. Never force-push.
+          $published = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            Write-Host "Manifest publish attempt $attempt/5"
+            git fetch origin "$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -ne 0) { throw "Could not fetch latest branch state." }
 
-          git push origin "HEAD:$env:GITHUB_REF_NAME"
+            git reset --hard "origin/$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -ne 0) { throw "Could not reset to latest remote branch state." }
+
+            python -c "import json,sys,os; from datetime import datetime,timezone; p='platform/release-config.json'; d=json.load(open(p,encoding='utf-8')); v=sys.argv[1]; h=sys.argv[2]; d['current_version']=v; d['updated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'); d['update_service']['status']='Latest Windows release published automatically from GitHub commits.'; w=d['channels']['windows']; w['version']=v; w['status']='Available: latest verified Windows installer.'; w['download_url']='https://github.com/'+os.getenv('GITHUB_REPOSITORY','AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT')+'/releases/download/v'+v+'/SaveVido-Setup.exe'; w['sha256']=h; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2); print('Website manifest updated:',v)" $version $sha256
+            if ($LASTEXITCODE -ne 0) { throw "Could not regenerate website release manifest." }
+
+            git add platform/release-config.json
+            git diff --cached --quiet
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Remote manifest already contains this release version."
+              $published = $true
+              break
+            }
+
+            git commit -m "chore: publish SaveVido $version release manifest"
+            if ($LASTEXITCODE -ne 0) { throw "Could not commit website release manifest." }
+
+            git push origin "HEAD:$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -eq 0) {
+              $published = $true
+              break
+            }
+
+            Write-Warning "Branch changed during manifest publish; retrying from latest remote state."
+            Start-Sleep -Seconds (3 * $attempt)
+          }
+
+          if (-not $published) {
+            throw "Could not publish release manifest after 5 safe retries; no force-push was used."
+          }
