@@ -10,7 +10,7 @@ def fetch(url: str, destination: Path) -> None:
 
 def safe_target(root: Path, name: str) -> Path:
     relative = PurePosixPath(name)
-    if relative.is_absolute() or ".." in relative.parts or not relative.parts:
+    if relative.is_absolute() or ".." in relative.parts or not relative.parts or "\\\\" in name or ":" in name:
         raise ValueError("Unsafe update path")
     target = (root / Path(*relative.parts)).resolve()
     if root.resolve() not in target.parents and target != root.resolve():
@@ -41,7 +41,7 @@ def main() -> int:
             raise ValueError("The update manifest is incomplete or invalid")
         patch = temp / "update.zip"
         fetch(patch_url, patch)
-        digest = hashlib.sha256(patch.read_bytes()).hexdigest()
+        hasher = hashlib.sha256()\n        with patch.open("rb") as stream:\n            for chunk in iter(lambda: stream.read(1024 * 1024), b""):\n                hasher.update(chunk)\n        digest = hasher.hexdigest()
         if digest != expected:
             raise ValueError("Update package verification failed")
         # Wait until SaveVido has exited before touching installed files.
@@ -85,7 +85,7 @@ def main() -> int:
                     shutil.copy2(target, saved)
                     target.unlink()
         except Exception:
-            for target, _ in reversed(changed):
+            for target, saved in deleted_backups:\n                if saved.exists():\n                    target.parent.mkdir(parents=True, exist_ok=True)\n                    shutil.copy2(saved, target)\n            for target, _ in reversed(changed):
                 saved = backup / target.relative_to(root)
                 if saved.exists():
                     target.parent.mkdir(parents=True, exist_ok=True)
