@@ -41,9 +41,18 @@ DB_PATH = APP_DATA_DIR / "analytics.db"
 
 # Keep partial downloads outside the OS temp directory so they survive
 # reboots and Windows temporary-file cleanup.
-DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
+# Prefer a simple C:\\Downloads\\SaveVido destination on Windows. If the
+# machine restricts writes to the drive root, fall back to the user's Downloads.
+if os.name == "nt":
+    DEFAULT_DOWNLOAD_ROOT = Path(os.getenv("SystemDrive", "C:")) / "Downloads" / "SaveVido"
+else:
+    DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
 DOWNLOAD_ROOT = Path(os.getenv("SAVEVIDO_DOWNLOAD_DIR", str(DEFAULT_DOWNLOAD_ROOT))).expanduser()
-DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+try:
+    DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+except OSError:
+    DOWNLOAD_ROOT = (Path.home() / "Downloads" / "SaveVido").expanduser()
+    DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
@@ -1204,6 +1213,24 @@ def find_output_file(temp_dir, mode):
     return final_path, final_path.stat().st_size
 
 
+def make_saved_filename(title, extension):
+    """Keep the source's real title and add a small SaveVido attribution."""
+    clean_title = re.sub(r'[<>:"/\\\\|?*\\x00-\\x1f]', "_", str(title or "video"))
+    clean_title = re.sub(r"\\s+", " ", clean_title).strip(" .")[:150].rstrip(" .")
+    if not clean_title:
+        clean_title = "video"
+    if clean_title.upper() in {"CON", "PRN", "AUX", "NUL"} or re.fullmatch(r"(COM|LPT)[1-9]", clean_title.upper()):
+        clean_title = "_" + clean_title
+
+    attribution = " (Downloaded from SaveVido)"
+    candidate = DOWNLOAD_ROOT / f"{clean_title}{attribution}{extension}"
+    number = 2
+    while candidate.exists():
+        candidate = DOWNLOAD_ROOT / f"{clean_title} ({number}){attribution}{extension}"
+        number += 1
+    return candidate
+
+
 def run_download_job(job_id):
     job = get_job(job_id)
     if not job:
@@ -1262,6 +1289,12 @@ def run_download_job(job_id):
 
         final_path, final_size = find_output_file(temp_dir, mode)
         title = downloaded_info.get("title") or title
+        # Move the finished media out of the hidden job workspace into the
+        # single SaveVido download folder, using the original media title.
+        destination = make_saved_filename(title, final_path.suffix.lower())
+        shutil.move(str(final_path), str(destination))
+        final_path = destination
+        final_size = final_path.stat().st_size
         platform = platform_for(url)
 
         with get_db() as connection:
