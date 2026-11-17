@@ -28,6 +28,7 @@
   const message = panel.querySelector('#savevidoUpdateMessage');
   const details = panel.querySelector('#savevidoUpdateDetails');
   const install = panel.querySelector('#savevidoInstallUpdate');
+  let installAction = 'savevido://install-update';
   const show = () => { panel.hidden = false; };
   const hide = () => { panel.hidden = true; };
   panel.querySelector('.savevido-update-close').addEventListener('click', hide);
@@ -40,21 +41,29 @@
   install.addEventListener('click', () => {
     install.disabled = true; install.textContent = 'Preparing update…';
     message.textContent = 'The update is being prepared. SaveVido will close, update changed files, and restart.';
-    location.href = 'savevido://install-update';
+    location.href = installAction;
   });
   window.addEventListener('savevido-update-result', event => {
     const data = event.detail || {};
     show(); install.hidden = true; install.disabled = false; install.textContent = 'Install update';
-    if (data.status === 'current') {
+    if (data.status === 'checking') {
+      message.textContent = 'Checking for updates…';
+      details.textContent = 'Connecting securely to SaveVido release information.';
+    } else if (data.status === 'current') {
       message.textContent = 'Your app is up to date.';
       details.textContent = 'You are using SaveVido ' + (data.current_version || '');
     } else if (data.status === 'available') {
       message.textContent = 'A new update is available.';
       details.textContent = 'Version ' + data.version + ' · Only changed files will be downloaded.';
       install.hidden = false;
+      installAction = 'savevido://install-update';
+      install.textContent = 'Install update';
     } else if (data.status === 'bootstrap') {
-      message.textContent = 'A one-time full installer update is required to activate the incremental updater.';
-      details.textContent = 'After this installation, future updates will download only changed files.';
+      message.textContent = 'A full installer update is required for this version.';
+      details.textContent = 'Download and run the installer once. Future compatible updates can use changed files only.';
+      install.hidden = false;
+      installAction = 'savevido://install-update';
+      install.textContent = 'Download full installer';
     } else {
       message.textContent = data.message || 'Could not check for updates. Please try again.';
     }
@@ -64,3 +73,18 @@
     install.hidden = true;
   });
 })();
+
+  window.addEventListener('savevido-update-installed', event => {
+    const data = event.detail || {};
+    show();
+    install.hidden = true;
+    message.textContent = 'Update installed successfully!';
+    details.textContent = 'SaveVido has restarted with version ' + (data.version || '') + '.';
+  });
+  window.addEventListener('savevido-update-failed', event => {
+    const data = event.detail || {};
+    show();
+    install.hidden = true;
+    message.textContent = 'The update could not be installed.';
+    details.textContent = data.message || 'Your previous version was restored. Please try again.';
+  });
