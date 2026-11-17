@@ -243,7 +243,6 @@ jobs:
             $relative = $_.FullName.Substring($root.Length + 1).Replace('\\','/')
             $current[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
           }
-
           $previous = $null
           $previousTag = gh release list --repo "$env:GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName'
           if ($LASTEXITCODE -eq 0 -and $previousTag) {
@@ -254,37 +253,46 @@ jobs:
               $previous = Get-Content (Join-Path $previousDir "SaveVido-Update-Manifest.json") -Raw | ConvertFrom-Json
             }
           }
-
+          $changed = @()
+          $deleted = @()
           if ($previous -and $previous.files) {
             $old = @{}
             foreach ($entry in $previous.files) { $old[$entry.path] = $entry.sha256 }
             $changed = @($current.Keys | Where-Object { -not $old.ContainsKey($_) -or $old[$_] -ne $current[$_] })
             $deleted = @($old.Keys | Where-Object { -not $current.ContainsKey($_) })
-            $zipItems = @()
+            $stage = Join-Path $env:RUNNER_TEMP "savevido-delta-stage"
+            if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+            New-Item -ItemType Directory -Force $stage | Out-Null
             foreach ($relative in $changed) {
               $source = Join-Path $root ($relative.Replace('/','\\'))
-              $zipItems += $source
+              $target = Join-Path $stage ($relative.Replace('/','\\'))
+              New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
+              Copy-Item $source $target -Force
             }
-            if ($zipItems.Count -gt 0) {
-              Compress-Archive -Path $zipItems -DestinationPath $zipPath -CompressionLevel Optimal -Force
-            } else {
-              Compress-Archive -Path (Join-Path $root "build_info.json") -DestinationPath $zipPath -CompressionLevel Optimal -Force
+            if ($changed.Count -eq 0) {
+              $target = Join-Path $stage "build_info.json"
+              Copy-Item (Join-Path $root "build_info.json") $target -Force
               $changed = @("build_info.json")
             }
+            Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipPath -CompressionLevel Optimal -Force
             $patchHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
-            $manifest = [ordered]@{
-              version = $version
-              patch_url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/SaveVido-Update.zip"
-              patch_sha256 = $patchHash
-              files = @($changed)
-              delete = @($deleted)
-            }
-            $manifest | ConvertTo-Json -Depth 8 | Set-Content $manifestPath -Encoding utf8
-            Write-Host "Incremental package prepared: $($changed.Count) changed files, $($deleted.Count) removed files."
+            $patchUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/SaveVido-Update.zip"
           } else {
-            Write-Host "No prior delta manifest found. This release is the one-time updater bootstrap; the full installer will install the updater."
+            Write-Host "Creating baseline manifest for this bootstrap release; the next release can publish a delta."
+            $patchHash = ""
+            $patchUrl = ""
           }
-
+          $fileEntries = @($current.Keys | Sort-Object | ForEach-Object { [ordered]@{ path = $_; sha256 = $current[$_] } })
+          $manifest = [ordered]@{
+            version = $version
+            patch_url = $patchUrl
+            patch_sha256 = $patchHash
+            files = $fileEntries
+            patch_files = @($changed)
+            delete = @($deleted)
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -Encoding utf8
+          Write-Host "Update manifest created: $($fileEntries.Count) tracked files; $($changed.Count) changed files."
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
@@ -292,8 +300,8 @@ jobs:
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           $tag = "v$version"
-          $assets = @("release/SaveVido-Setup.exe")
-          if (Test-Path "release/SaveVido-Update.zip") { $assets += "release/SaveVido-Update.zip"; $assets += "release/SaveVido-Update-Manifest.json" }
+          $assets = @("release/SaveVido-Setup.exe", "release/SaveVido-Update-Manifest.json")
+          if (Test-Path "release/SaveVido-Update.zip") { $assets += "release/SaveVido-Update.zip" }
           gh release create $tag @assets --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "SaveVido $version" --notes "SaveVido Windows installer and, when available, a verified changed-files updater. Requires Windows 10 or Windows 11."
           if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed." }
 
