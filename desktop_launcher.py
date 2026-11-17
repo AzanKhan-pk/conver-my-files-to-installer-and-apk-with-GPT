@@ -187,9 +187,33 @@ def main():
     qt_app.setApplicationName("SaveVido")
     qt_app.setQuitOnLastWindowClosed(False)
     if ICON_PATH.is_file(): qt_app.setWindowIcon(QIcon(str(ICON_PATH)))
-    server_thread.start()
     checker = UpdateChecker(qt_app)
     window = SaveVidoWindow(checker, qt_app)
+
+    # Ask once. The default choice is Decline; the owner token is never present here.
+    consent_file = Path(savevido_app.APP_DATA_DIR) / "telemetry-consent.json"
+    consent = None
+    try:
+        consent = bool(json.loads(consent_file.read_text(encoding="utf-8")).get("enabled"))
+    except Exception:
+        consent = None
+    if consent is None:
+        choice = QMessageBox.question(
+            window, "SaveVido privacy choice",
+            "Would you like to share anonymous app-open and download success/failure events, app version, file type and source website hostname to help improve SaveVido? The service may estimate country/city from network metadata. It does not receive your raw IP, full media URL, file name or downloaded file. Choose No to disable analytics.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        consent = choice == QMessageBox.StandardButton.Yes
+        try:
+            consent_file.write_text(json.dumps({"enabled": consent}), encoding="utf-8")
+        except OSError:
+            pass
+    savevido_app.configure_telemetry(APP_VERSION, enabled=consent)
+    if consent:
+        savevido_app.send_telemetry("app_open")
+
+    server_thread.start()
     if QSystemTrayIcon.isSystemTrayAvailable():
         tray = QSystemTrayIcon(QIcon(str(ICON_PATH)), qt_app)
         tray.setToolTip("SaveVido — Video Downloader")
@@ -210,6 +234,11 @@ def main():
     else:
         QMessageBox.warning(window, "SaveVido", "The system tray is unavailable. SaveVido will remain open in its app window.")
     window.show()
+    if savevido_app.TELEMETRY_ENABLED:
+        heartbeat = QTimer(qt_app)
+        heartbeat.setInterval(5 * 60 * 1000)
+        heartbeat.timeout.connect(lambda: savevido_app.send_telemetry("app_heartbeat"))
+        heartbeat.start()
     timer = QTimer(qt_app)
     timer.setInterval(6 * 60 * 60 * 1000)
     timer.timeout.connect(lambda: window.check_updates(silent=True))
