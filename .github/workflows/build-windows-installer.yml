@@ -10,6 +10,7 @@ on:
     paths:
       - "app.py"
       - "desktop_launcher.py"
+      - "updater.py"
       - "requirements-windows.txt"
       - "templates/**"
       - "static/**"
