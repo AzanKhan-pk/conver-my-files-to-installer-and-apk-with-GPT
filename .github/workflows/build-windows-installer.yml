@@ -68,6 +68,7 @@ jobs:
           $webEngineModule = Get-ChildItem "dist\SaveVido" -Filter "QtWebEngineWidgets*.pyd" -Recurse | Select-Object -First 1
           if (-not $webEngineModule) { throw "PySide6.QtWebEngineWidgets was not bundled. Refusing to create a broken installer." }
           Write-Host "Qt WebEngine Widgets module bundled: $($webEngineModule.FullName)"
+          Copy-Item "build_info.json" "dist\\SaveVido\\build_info.json" -Force
 
       - name: Build standalone incremental updater
         shell: pwsh
@@ -241,7 +242,7 @@ jobs:
           $zipPath = Join-Path $releaseDir "SaveVido-Update.zip"
           $current = @{}
           Get-ChildItem $root -File -Recurse | ForEach-Object {
-            $relative = $_.FullName.Substring($root.Length + 1).Replace('\\','/')
+            $relative = $_.FullName.Substring($root.Length + 1).Replace([char]92,[char]47)
             $current[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
           }
           $previous = $null
@@ -265,13 +266,13 @@ jobs:
             if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
             New-Item -ItemType Directory -Force $stage | Out-Null
             foreach ($relative in $changed) {
-              $source = Join-Path $root ($relative.Replace('/','\\'))
-              $target = Join-Path $stage ($relative.Replace('/','\\'))
+              $source = Join-Path $root ($relative.Replace([char]47,[char]92))
+              $target = Join-Path $stage ($relative.Replace([char]47,[char]92))
               New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
               Copy-Item $source $target -Force
             }
             if ($changed.Count -eq 0) {
-              $target = Join-Path $stage "build_info.json"
+              $target = Join-Path $stage ($relative.Replace([char]47,[char]92))
               Copy-Item (Join-Path $root "build_info.json") $target -Force
               $changed = @("build_info.json")
             }
