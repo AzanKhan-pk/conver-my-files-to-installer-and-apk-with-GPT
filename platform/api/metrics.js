@@ -1,6 +1,6 @@
 const { timingSafeEqual } = require("node:crypto");
 const { getSql, send } = require("./_db");
-function authorized(req){const expected=process.env.ADMIN_DASHBOARD_TOKEN||"",supplied=String(req.headers.authorization||"").replace(/^Bearer\\s+/i,"");if(!expected||!supplied)return false;const a=Buffer.from(expected),b=Buffer.from(supplied);return a.length===b.length&&timingSafeEqual(a,b);}
+function authorized(req){const expected=process.env.ADMIN_DASHBOARD_TOKEN||"",supplied=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");if(!expected||!supplied)return false;const a=Buffer.from(expected),b=Buffer.from(supplied);return a.length===b.length&&timingSafeEqual(a,b);}
 module.exports=async function handler(req,res){
  if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});
  if(!authorized(req))return send(res,401,{error:"Unauthorized"});
