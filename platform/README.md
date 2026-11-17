@@ -58,3 +58,15 @@ Do not replace or reformat the existing downloader templates, CSS, JavaScript, F
 - Session identifiers are random browser-local IDs; only SHA-256 hashes are stored. Raw IP addresses and personal profile information are not collected.
 - Successful downloads remain at zero until a real artifact-serving route records the completed file response. A button click is not counted as a download.
 - Ratings remain empty until a rating submission flow with abuse controls is implemented.
+
+
+## Private owner analytics
+
+- The public website sends limited page-view events to a separate owner-dashboard service; it has no database credentials.
+- The Neon database connection is stored only in the owner-dashboard Vercel project.
+- The owner metrics endpoint requires an ADMIN_DASHBOARD_TOKEN bearer credential.
+- Approximate country/city may be derived from hosting request metadata; raw IP addresses and GPS coordinates are not stored.
+- Referrer host and page path are stored without query strings. Sensitive URL parameters are not collected.
+- Successful download counts are shown only for server-confirmed download_succeeded / download_served events. A click is not counted as a completed download.
+- Media URLs and detailed app failures are not available until the desktop app sends those events through an authenticated telemetry design.
+- Existing analytics rows are preserved.
