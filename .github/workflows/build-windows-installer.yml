@@ -103,7 +103,42 @@ jobs:
             throw "PyInstaller application folder is missing: $appRoot"
           }
 
-          Invoke-WebRequest -Uri "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile $archive
+          # Gyan.dev is the preferred essentials build. Retry temporary 503/network
+          # failures, then fall back to a static Windows build hosted on GitHub Releases.
+          $downloaded = $false
+          $sources = @(
+            "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          )
+          foreach ($source in $sources) {
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              try {
+                if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+                Write-Host "Downloading FFmpeg (attempt $attempt/4): $source"
+                Invoke-WebRequest -Uri $source -OutFile $archive -TimeoutSec 240
+                $archiveInfo = Get-Item -LiteralPath $archive -ErrorAction Stop
+                if ($archiveInfo.Length -lt 1000000) {
+                  throw "Downloaded FFmpeg archive is unexpectedly small ($($archiveInfo.Length) bytes)."
+                }
+                $downloaded = $true
+                break
+              }
+              catch {
+                Write-Warning "FFmpeg download failed: $($_.Exception.Message)"
+                if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+                if ($attempt -lt 4) {
+                  $delay = 10 * $attempt
+                  Write-Host "Retrying FFmpeg download in $delay seconds..."
+                  Start-Sleep -Seconds $delay
+                }
+              }
+            }
+            if ($downloaded) { break }
+            Write-Warning "This FFmpeg source is unavailable; trying the next source."
+          }
+          if (-not $downloaded) {
+            throw "FFmpeg download failed from both Gyan.dev and the GitHub Releases fallback after retries."
+          }
           if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
             throw "FFmpeg archive download did not create: $archive"
           }
