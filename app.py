@@ -65,6 +65,65 @@ app.config["SECRET_KEY"] = os.getenv(
     "SECRET_KEY", "change-this-secret-key"
 )
 
+# Optional, consent-based telemetry. No owner/database secret is shipped in SaveVido.
+TELEMETRY_ENDPOINT = "https://savevido-owner-dashboard.vercel.app/api/track"
+TELEMETRY_ENABLED = False
+TELEMETRY_APP_VERSION = "unknown"
+TELEMETRY_SESSION_ID = None
+
+
+def configure_telemetry(app_version="unknown", enabled=False):
+    """Enable anonymous analytics only after the user opts in at first launch."""
+    global TELEMETRY_ENABLED, TELEMETRY_APP_VERSION, TELEMETRY_SESSION_ID
+    TELEMETRY_ENABLED = bool(enabled)
+    TELEMETRY_APP_VERSION = str(app_version or "unknown")[:32]
+    if not TELEMETRY_ENABLED:
+        return
+    session_file = APP_DATA_DIR / "telemetry-session-id"
+    try:
+        value = session_file.read_text(encoding="utf-8").strip()
+        if not re.fullmatch(r"[a-f0-9]{32}", value):
+            raise ValueError("invalid analytics session id")
+    except Exception:
+        value = uuid.uuid4().hex
+        try:
+            session_file.write_text(value, encoding="utf-8")
+        except OSError:
+            pass
+    TELEMETRY_SESSION_ID = value
+
+
+def send_telemetry(event_type, source_url=None, error=None, file_type=None):
+    """Fire-and-forget; analytics failures must never slow or break a download."""
+    if not TELEMETRY_ENABLED or not TELEMETRY_SESSION_ID:
+        return
+    if event_type not in {"app_open", "app_heartbeat", "download_succeeded", "download_failed"}:
+        return
+    try:
+        source_host = (urlparse(str(source_url)).hostname or "").lower()[:180] if source_url else None
+        message = ""
+        if error:
+            message = re.sub(r"https?://\S+", "[source URL hidden]", str(error), flags=re.I)
+            message = re.sub(r"(?i)(token|password|secret|key)=([^&\s]+)", r"\1=[hidden]", message)
+            message = re.sub(r"\s+", " ", message).strip()[:180]
+        payload = {
+            "event_type": event_type, "platform": "windows",
+            "session_id": TELEMETRY_SESSION_ID, "app_version": TELEMETRY_APP_VERSION,
+            "source_host": source_host, "file_type": str(file_type or "")[:12] or None,
+            "error_code": ("network_error" if error and "network" in message.lower() else "download_error") if error else None,
+            "error_message": message or None,
+        }
+        def deliver():
+            try:
+                requests.post(TELEMETRY_ENDPOINT, json=payload, timeout=(2, 3))
+            except Exception:
+                app.logger.debug("SaveVido telemetry delivery skipped", exc_info=True)
+        threading.Thread(target=deliver, name="SaveVidoTelemetry", daemon=True).start()
+    except Exception:
+        app.logger.debug("SaveVido telemetry preparation skipped", exc_info=True)
+
+
+
 MIN_VALID_FILE_BYTES = 1024
 
 QUALITY_HEIGHTS = {
@@ -1326,6 +1385,7 @@ def run_download_job(job_id):
             file_type=file_type,
             file_size=final_size,
         )
+        send_telemetry("download_succeeded", source_url=url, file_type=file_type)
 
     except Exception as error:
         if find_stop_signal(error):
@@ -1347,6 +1407,8 @@ def run_download_job(job_id):
             return
 
         app.logger.exception("Download job failed")
+        current_job = get_job(job_id) or {}
+        send_telemetry("download_failed", source_url=url, error=humanize_error(error), file_type=current_job.get("file_type"))
         if is_network_error(error):
             update_job(
                 job_id,
