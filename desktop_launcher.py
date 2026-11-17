@@ -56,6 +56,14 @@ class UpdateChecker(QObject):
                 if not manifest_url:
                     self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": assets.get("SaveVido-Setup.exe", "")})
                     return
+                manifest_response = requests.get(manifest_url, timeout=(5, 15))
+                manifest_response.raise_for_status()
+                update_manifest = manifest_response.json()
+                patch_url = str(update_manifest.get("patch_url") or "")
+                patch_hash = str(update_manifest.get("patch_sha256") or "")
+                if not patch_url.startswith("https://") or len(patch_hash) != 64:
+                    self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": assets.get("SaveVido-Setup.exe", "")})
+                    return
                 self.finished.emit({"status": "available", "version": tag, "manifest_url": manifest_url})
             except Exception as exc:
                 self.finished.emit({"status": "error", "message": f"Could not check for updates. Please check your internet connection and try again. ({exc})"})
@@ -82,6 +90,7 @@ class SaveVidoWindow(QMainWindow):
         super().__init__()
         self.checker, self.qt_app = checker, qt_app
         self.pending_manifest_url = None
+        self.silent_check = False
         self.setWindowTitle(f"SaveVido {APP_VERSION} — Video Downloader")
         self.setMinimumSize(900, 650)
         self.resize(1180, 780)
@@ -97,13 +106,17 @@ class SaveVidoWindow(QMainWindow):
         payload = json.dumps(data).replace("</", "<\\/")
         self.browser.page().runJavaScript(f"window.dispatchEvent(new CustomEvent('{name}', {{detail: {payload}}}));")
 
-    def check_updates(self):
-        self.dispatch("savevido-update-result", {"status": "checking", "current_version": APP_VERSION})
+    def check_updates(self, silent=False):
+        self.silent_check = silent
+        if not silent:
+            self.dispatch("savevido-update-result", {"status": "checking", "current_version": APP_VERSION})
         self.checker.check()
 
     def on_update_result(self, data):
         self.pending_manifest_url = data.get("manifest_url")
-        self.dispatch("savevido-update-result", data)
+        if not self.silent_check or data.get("status") in ("available", "bootstrap"):
+            self.dispatch("savevido-update-result", data)
+        self.silent_check = False
 
     def install_update(self):
         if not self.pending_manifest_url:
@@ -161,9 +174,9 @@ def main():
     window.show()
     timer = QTimer(qt_app)
     timer.setInterval(6 * 60 * 60 * 1000)
-    timer.timeout.connect(window.check_updates)
+    timer.timeout.connect(lambda: window.check_updates(silent=True))
     timer.start()
-    QTimer.singleShot(5000, window.check_updates)
+    QTimer.singleShot(5000, lambda: window.check_updates(silent=True))
     qt_app.aboutToQuit.connect(server.shutdown)
     qt_app.aboutToQuit.connect(server.server_close)
     sys.exit(qt_app.exec())
