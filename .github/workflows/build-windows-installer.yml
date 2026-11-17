@@ -68,6 +68,15 @@ jobs:
           if (-not $webEngineModule) { throw "PySide6.QtWebEngineWidgets was not bundled. Refusing to create a broken installer." }
           Write-Host "Qt WebEngine Widgets module bundled: $($webEngineModule.FullName)"
 
+      - name: Build standalone incremental updater
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SaveVidoUpdater updater.py
+          if ($LASTEXITCODE -ne 0) { throw "SaveVido updater build failed." }
+          Copy-Item "dist\\SaveVidoUpdater.exe" "dist\\SaveVido\\SaveVidoUpdater.exe" -Force
+          if (-not (Test-Path "dist\\SaveVido\\SaveVidoUpdater.exe")) { throw "Updater executable is missing." }
+
+
       - name: Remove unused Qt QML payload before packaging
         shell: pwsh
         run: |
@@ -217,6 +226,65 @@ jobs:
           if ($size -lt 1000000) { throw "Installer output is unexpectedly small ($size bytes)." }
           Write-Host ("Installer compiled successfully: {0} ({1:N1} MB)" -f $installer, ($size / 1MB))
 
+      - name: Prepare changed-files update package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "1.0.$env:GITHUB_RUN_NUMBER"
+          $tag = "v$version"
+          $root = (Resolve-Path "dist\\SaveVido").Path
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
+          $manifestPath = Join-Path $releaseDir "SaveVido-Update-Manifest.json"
+          $zipPath = Join-Path $releaseDir "SaveVido-Update.zip"
+          $current = @{}
+          Get-ChildItem $root -File -Recurse | ForEach-Object {
+            $relative = $_.FullName.Substring($root.Length + 1).Replace('\\','/')
+            $current[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+          }
+
+          $previous = $null
+          $previousTag = gh release list --repo "$env:GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName'
+          if ($LASTEXITCODE -eq 0 -and $previousTag) {
+            $previousDir = Join-Path $env:RUNNER_TEMP "savevido-previous"
+            New-Item -ItemType Directory -Force $previousDir | Out-Null
+            gh release download $previousTag --repo "$env:GITHUB_REPOSITORY" --pattern "SaveVido-Update-Manifest.json" --dir $previousDir
+            if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $previousDir "SaveVido-Update-Manifest.json"))) {
+              $previous = Get-Content (Join-Path $previousDir "SaveVido-Update-Manifest.json") -Raw | ConvertFrom-Json
+            }
+          }
+
+          if ($previous -and $previous.files) {
+            $old = @{}
+            foreach ($entry in $previous.files) { $old[$entry.path] = $entry.sha256 }
+            $changed = @($current.Keys | Where-Object { -not $old.ContainsKey($_) -or $old[$_] -ne $current[$_] })
+            $deleted = @($old.Keys | Where-Object { -not $current.ContainsKey($_) })
+            $zipItems = @()
+            foreach ($relative in $changed) {
+              $source = Join-Path $root ($relative.Replace('/','\\'))
+              $zipItems += $source
+            }
+            if ($zipItems.Count -gt 0) {
+              Compress-Archive -Path $zipItems -DestinationPath $zipPath -CompressionLevel Optimal -Force
+            } else {
+              Compress-Archive -Path (Join-Path $root "build_info.json") -DestinationPath $zipPath -CompressionLevel Optimal -Force
+              $changed = @("build_info.json")
+            }
+            $patchHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+            $manifest = [ordered]@{
+              version = $version
+              patch_url = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/SaveVido-Update.zip"
+              patch_sha256 = $patchHash
+              files = @($changed)
+              delete = @($deleted)
+            }
+            $manifest | ConvertTo-Json -Depth 8 | Set-Content $manifestPath -Encoding utf8
+            Write-Host "Incremental package prepared: $($changed.Count) changed files, $($deleted.Count) removed files."
+          } else {
+            Write-Host "No prior delta manifest found. This release is the one-time updater bootstrap; the full installer will install the updater."
+          }
+
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
@@ -224,7 +292,9 @@ jobs:
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           $tag = "v$version"
-          gh release create $tag "release/SaveVido-Setup.exe" --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "SaveVido $version" --notes "SaveVido Windows installer. Requires Windows 10 or Windows 11. Verify compatibility on your PC before relying on it."
+          $assets = @("release/SaveVido-Setup.exe")
+          if (Test-Path "release/SaveVido-Update.zip") { $assets += "release/SaveVido-Update.zip"; $assets += "release/SaveVido-Update-Manifest.json" }
+          gh release create $tag @assets --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "SaveVido $version" --notes "SaveVido Windows installer and, when available, a verified changed-files updater. Requires Windows 10 or Windows 11."
           if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed." }
 
           $sha256 = (Get-FileHash "release/SaveVido-Setup.exe" -Algorithm SHA256).Hash.ToLower()
