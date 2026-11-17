@@ -72,7 +72,6 @@
     show(); message.textContent = 'Installing update…'; details.textContent = 'Please wait. SaveVido will restart when the update is complete.';
     install.hidden = true;
   });
-})();
 
   window.addEventListener('savevido-update-installed', event => {
     const data = event.detail || {};
@@ -88,3 +87,4 @@
     message.textContent = 'The update could not be installed.';
     details.textContent = data.message || 'Your previous version was restored. Please try again.';
   });
+})();
