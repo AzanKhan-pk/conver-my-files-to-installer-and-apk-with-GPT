@@ -1,5 +1,5 @@
 """SaveVido native Windows desktop launcher with incremental update support."""
-import json, os, re, subprocess, sys, threading
+import json, os, re, subprocess, sys, threading, time
 from pathlib import Path
 if sys.platform == "win32":
     try:
@@ -44,6 +44,25 @@ def version_tuple(value):
 
 RELEASE_CONFIG_URL = f"https://raw.githubusercontent.com/{REPO}/savevido-central-platform/platform/release-config.json"
 
+
+def update_is_mandatory(version):
+    """Make an update required 48 hours after it is first detected."""
+    state_file = Path(savevido_app.APP_DATA_DIR) / "update-reminder.json"
+    now = time.time()
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        if state.get("version") != version:
+            raise ValueError("different update version")
+        first_seen = float(state.get("first_seen", now))
+    except Exception:
+        first_seen = now
+        try:
+            state_file.parent.mkdir(parents=True, exist_ok=True)
+            state_file.write_text(json.dumps({"version": version, "first_seen": first_seen}), encoding="utf-8")
+        except OSError:
+            pass
+    return now - first_seen >= 48 * 60 * 60
+
 class UpdateChecker(QObject):
     finished = Signal(dict)
 
@@ -58,6 +77,10 @@ class UpdateChecker(QObject):
                 if not tag:
                     raise ValueError("The SaveVido release version is missing.")
                 if version_tuple(tag) <= version_tuple(APP_VERSION):
+                    try:
+                        (Path(savevido_app.APP_DATA_DIR) / "update-reminder.json").unlink(missing_ok=True)
+                    except OSError:
+                        pass
                     self.finished.emit({"status": "current", "current_version": APP_VERSION})
                     return
 
@@ -70,14 +93,14 @@ class UpdateChecker(QObject):
                 base_version = str(update_manifest.get("base_version") or "")
                 installer_url = str(windows.get("download_url") or "")
                 if not patch_url.startswith("https://") or len(patch_hash) != 64:
-                    self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": installer_url})
+                    self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": installer_url, "mandatory": update_is_mandatory(tag)})
                     return
                 # A release delta is only valid for the immediately preceding version.
                 # Never apply a partial patch to an older installation.
                 if not base_version or version_tuple(APP_VERSION) != version_tuple(base_version):
                     self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": installer_url})
                     return
-                self.finished.emit({"status": "available", "version": tag, "manifest_url": manifest_url})
+                self.finished.emit({"status": "available", "version": tag, "manifest_url": manifest_url, "mandatory": update_is_mandatory(tag)})
             except Exception as exc:
                 self.finished.emit({"status": "error", "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
         threading.Thread(target=worker, name="SaveVidoUpdateCheck", daemon=True).start()
@@ -95,6 +118,8 @@ class UpdatePage(QWebEnginePage):
                 self.window.check_updates()
             elif url.host() == "install-update":
                 self.window.install_update()
+            elif url.host() == "restart-app":
+                self.window.restart_app()
             return False
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
@@ -103,7 +128,14 @@ class SaveVidoWindow(QMainWindow):
         super().__init__()
         self.checker, self.qt_app = checker, qt_app
         self.pending_manifest_url = None
+        self.pending_installer_url = None
+        self.pending_version = None
         self.silent_check = False
+        self.update_helper = None
+        self.update_status_file = Path(savevido_app.APP_DATA_DIR) / "update-status.json"
+        self.update_poll = QTimer(self)
+        self.update_poll.setInterval(400)
+        self.update_poll.timeout.connect(self.poll_update_status)
         self.setWindowTitle(f"SaveVido {APP_VERSION} — Video Downloader")
         self.setMinimumSize(900, 650)
         self.resize(1180, 780)
@@ -143,6 +175,7 @@ class SaveVidoWindow(QMainWindow):
     def on_update_result(self, data):
         self.pending_manifest_url = data.get("manifest_url")
         self.pending_installer_url = data.get("installer_url")
+        self.pending_version = data.get("version")
         if not self.silent_check or data.get("status") in ("available", "bootstrap"):
             self.dispatch("savevido-update-result", data)
         self.silent_check = False
@@ -152,24 +185,56 @@ class SaveVidoWindow(QMainWindow):
             if self.pending_installer_url:
                 QDesktopServices.openUrl(QUrl(self.pending_installer_url))
             else:
-                self.dispatch("savevido-update-result", {"status": "error", "message": "The full installer link is unavailable. Please try again later."})
+                self.dispatch("savevido-update-result", {"status": "error", "message": "The update is not ready. Check for updates again."})
             return
         updater = APP_ROOT / "SaveVidoUpdater.exe"
         if getattr(sys, "frozen", False):
             command = [str(updater), "--manifest-url", self.pending_manifest_url, "--app-root", str(APP_ROOT)]
         else:
             command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-url", self.pending_manifest_url, "--app-root", str(APP_ROOT)]
-        status_file = Path(savevido_app.APP_DATA_DIR) / "update-status.json"
-        command += ["--wait-pid", str(os.getpid()), "--status-file", str(status_file), "--restart"]
+        self.update_status_file.parent.mkdir(parents=True, exist_ok=True)
+        self.update_status_file.unlink(missing_ok=True)
+        command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file), "--restart"]
         if not Path(command[0]).exists():
-            self.dispatch("savevido-update-result", {"status": "error", "message": "The updater component is missing. Please download and run the latest full installer."})
+            self.dispatch("savevido-update-result", {"status": "error", "message": "The updater component is missing. Please install the latest full SaveVido setup once."})
             return
         try:
-            self.dispatch("savevido-update-installing", {})
-            subprocess.Popen(command, cwd=str(APP_ROOT), close_fds=True)
-            QTimer.singleShot(900, self.qt_app.quit)
+            self.dispatch("savevido-update-installing", {"version": self.pending_version})
+            self.update_helper = subprocess.Popen(command, cwd=str(APP_ROOT), close_fds=True)
+            self.update_poll.start()
         except Exception as exc:
             self.dispatch("savevido-update-result", {"status": "error", "message": f"Could not start the updater: {exc}"})
+
+    def poll_update_status(self):
+        try:
+            data = json.loads(self.update_status_file.read_text(encoding="utf-8"))
+        except Exception:
+            if self.update_helper is not None and self.update_helper.poll() is not None:
+                self.update_poll.stop()
+                self.dispatch("savevido-update-failed", {"message": "The updater stopped before reporting a result. Please try again."})
+            return
+        state = data.get("status")
+        if state in ("downloading", "verifying"):
+            self.dispatch("savevido-update-progress", data)
+        elif state == "ready":
+            self.update_poll.stop()
+            self.dispatch("savevido-update-ready", data)
+            self.update_status_file.unlink(missing_ok=True)
+            self.qt_app.quit()
+        elif state == "failed":
+            self.update_poll.stop()
+            self.dispatch("savevido-update-failed", data)
+            self.update_status_file.unlink(missing_ok=True)
+        elif state == "installed":
+            self.update_poll.stop()
+            self.dispatch("savevido-update-installed", data)
+            self.update_status_file.unlink(missing_ok=True)
+
+    def restart_app(self):
+        exe = APP_ROOT / "SaveVido.exe"
+        if exe.is_file():
+            subprocess.Popen([str(exe)], cwd=str(APP_ROOT), close_fds=True)
+        self.qt_app.quit()
 
     def closeEvent(self, event):
         event.ignore()
