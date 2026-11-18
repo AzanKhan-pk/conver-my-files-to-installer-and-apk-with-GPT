@@ -19,7 +19,9 @@ async function userId(req){
  const token=String(req.headers.authorization||"").replace(/^Bearer\\s+/i,"");
  if(!token)throw new Error("Unauthorized");
  jwks ||= createRemoteJWKSet(new URL(JWKS_URL));
- const {payload}=await jwtVerify(token,jwks,{algorithms:["EdDSA"]});
+ const issuer=process.env.NEON_AUTH_BASE_URL;
+ if(!issuer)throw new Error("Auth issuer is not configured");
+ const {payload}=await jwtVerify(token,jwks,{algorithms:["EdDSA"],issuer});
  const sub=String(payload.sub||"");
  if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sub))throw new Error("Invalid account identity");
  return sub;
