@@ -895,3 +895,21 @@ html.savevido-desktop *::after {
 }
 #savevidoInstallUpdate:disabled { opacity:.6; cursor:wait; }
 html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
+
+/* Native desktop update widget */
+#savevidoUpdateIcon{position:fixed;z-index:10001;top:18px;right:22px;display:flex;align-items:center;gap:5px;border:1px solid rgba(130,140,255,.45);border-radius:20px;padding:7px 10px;background:#171a2b;color:#fff;cursor:pointer;box-shadow:0 5px 18px #0005}
+#savevidoUpdateIcon[hidden]{display:none}
+#savevidoUpdateIcon svg{width:19px;height:19px}
+#savevidoUpdatePercent{font:600 11px Manrope,sans-serif}
+#savevidoUpdatePanel{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:rgba(5,7,18,.78);backdrop-filter:blur(5px)}
+#savevidoUpdatePanel[hidden]{display:none}
+.savevido-update-card{position:relative;width:min(440px,100%);padding:28px;border:1px solid rgba(130,140,255,.35);border-radius:20px;background:#111426;color:#f7f7ff;box-shadow:0 20px 70px #0008}
+.savevido-update-card h2{margin:8px 0 12px;color:#fff}
+.savevido-update-card p{line-height:1.55}
+.savevido-update-close{position:absolute;right:13px;top:10px;border:0;background:transparent;color:#fff;font-size:25px;cursor:pointer}
+.savevido-update-card button:not(.savevido-update-close){border:0;border-radius:10px;padding:12px 18px;background:#6865f2;color:white;font-weight:700;cursor:pointer}
+.savevido-update-card button:disabled{opacity:.65;cursor:wait}
+.savevido-update-track{height:9px;overflow:hidden;border-radius:10px;background:#292d45}
+.savevido-update-track span{display:block;width:0;height:100%;border-radius:10px;background:linear-gradient(90deg,#6865f2,#38c9b4);transition:width .2s}
+#savevidoUpdateProgressText{font-size:12px;color:#c4c8df}
+.savevido-update-details{color:#c4c8df;font-size:13px}
