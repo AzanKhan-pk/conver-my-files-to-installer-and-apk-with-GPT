@@ -8,7 +8,7 @@ function cors(req,res){
  const origin=String(req.headers.origin||"");
  if(origin&&!ORIGINS.has(origin))return false;
  if(origin){res.setHeader("Access-Control-Allow-Origin",origin);res.setHeader("Vary","Origin");}
- res.setHeader("Access-Control-Allow-Methods","GET, PUT, OPTIONS");
+ res.setHeader("Access-Control-Allow-Methods","GET, PUT, DELETE, OPTIONS");
  res.setHeader("Access-Control-Allow-Headers","Authorization, Content-Type");
  res.setHeader("Cache-Control","no-store");
  return true;
@@ -33,9 +33,14 @@ async function userId(req){
 module.exports=async function handler(req,res){
  if(!cors(req,res))return send(res,403,{error:"Origin not allowed"});
  if(req.method==="OPTIONS")return res.status(204).end();
- if(!["GET","PUT"].includes(req.method))return send(res,405,{error:"Method not allowed"});
+ if(!["GET","PUT","DELETE"].includes(req.method))return send(res,405,{error:"Method not allowed"});
  try{
   const id=await userId(req),sql=getSql();
+  if(req.method==="DELETE"){
+   await sql`DELETE FROM savevido_user_profiles WHERE auth_user_id=${id}`;
+   await sql`DELETE FROM savevido_privacy_preferences WHERE auth_user_id=${id}`;
+   return send(res,200,{ok:true,message:"Saved profile and preferences cleared. Your sign-in account remains active."});
+  }
   if(req.method==="GET"){
    const [profiles,prefs]=await Promise.all([
     sql\`SELECT nickname,whatsapp_number,profile_reminders_enabled,last_profile_review_at,created_at,updated_at FROM savevido_user_profiles WHERE auth_user_id=\${id} LIMIT 1\`,
