@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - savevido-central-platform
+      - feature/privacy-location-consent
     paths:
       - "app.py"
       - "desktop_launcher.py"
@@ -15,6 +16,7 @@ on:
       - "templates/**"
       - "static/**"
       - "installer/**"
+      - "platform/privacy.html"
       - ".github/workflows/build-windows-installer.yml"
 
 permissions:
