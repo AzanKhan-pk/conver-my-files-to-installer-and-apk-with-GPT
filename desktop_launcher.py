@@ -87,20 +87,39 @@ class UpdateChecker(QObject):
                 manifest_url = f"https://github.com/{REPO}/releases/download/v{tag}/SaveVido-Update-Manifest.json"
                 manifest_response = requests.get(manifest_url, timeout=(8, 30), headers={"Cache-Control": "no-cache"})
                 manifest_response.raise_for_status()
-                update_manifest = manifest_response.json()
-                patch_url = str(update_manifest.get("patch_url") or "")
-                patch_hash = str(update_manifest.get("patch_sha256") or "")
-                base_version = str(update_manifest.get("base_version") or "")
+                latest_manifest = manifest_response.json()
                 installer_url = str(windows.get("download_url") or "")
+                patch_url = str(latest_manifest.get("patch_url") or "")
+                patch_hash = str(latest_manifest.get("patch_sha256") or "")
                 if not patch_url.startswith("https://") or len(patch_hash) != 64:
                     self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": installer_url, "mandatory": update_is_mandatory(tag)})
                     return
-                # A release delta is only valid for the immediately preceding version.
-                # Never apply a partial patch to an older installation.
-                if not base_version or version_tuple(APP_VERSION) != version_tuple(base_version):
-                    self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": installer_url})
+
+                # Follow delta manifests backwards so older installations can update in stages.
+                chain = [(tag, manifest_url, latest_manifest)]
+                base_version = str(latest_manifest.get("base_version") or "")
+                visited = set()
+                while base_version and version_tuple(base_version) != version_tuple(APP_VERSION):
+                    if base_version in visited or len(chain) >= 20:
+                        break
+                    visited.add(base_version)
+                    previous_url = f"https://github.com/{REPO}/releases/download/v{base_version}/SaveVido-Update-Manifest.json"
+                    previous_response = requests.get(previous_url, timeout=(8, 30), headers={"Cache-Control": "no-cache"})
+                    if not previous_response.ok:
+                        break
+                    previous_manifest = previous_response.json()
+                    previous_patch = str(previous_manifest.get("patch_url") or "")
+                    previous_hash = str(previous_manifest.get("patch_sha256") or "")
+                    if str(previous_manifest.get("version") or "") != base_version or not previous_patch.startswith("https://") or len(previous_hash) != 64:
+                        break
+                    chain.append((base_version, previous_url, previous_manifest))
+                    base_version = str(previous_manifest.get("base_version") or "")
+
+                if not base_version or version_tuple(base_version) != version_tuple(APP_VERSION):
+                    self.finished.emit({"status": "bootstrap", "version": tag, "installer_url": installer_url, "mandatory": update_is_mandatory(tag)})
                     return
-                self.finished.emit({"status": "available", "version": tag, "manifest_url": manifest_url, "mandatory": update_is_mandatory(tag)})
+                manifest_urls = [item[1] for item in reversed(chain)]
+                self.finished.emit({"status": "available", "version": tag, "manifest_urls": manifest_urls, "mandatory": update_is_mandatory(tag)})
             except Exception as exc:
                 self.finished.emit({"status": "error", "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
         threading.Thread(target=worker, name="SaveVidoUpdateCheck", daemon=True).start()
@@ -130,7 +149,7 @@ class SaveVidoWindow(QMainWindow):
     def __init__(self, checker, qt_app):
         super().__init__()
         self.checker, self.qt_app = checker, qt_app
-        self.pending_manifest_url = None
+        self.pending_manifest_urls = []
         self.pending_installer_url = None
         self.pending_version = None
         self.silent_check = False
@@ -176,7 +195,7 @@ class SaveVidoWindow(QMainWindow):
         self.checker.check()
 
     def on_update_result(self, data):
-        self.pending_manifest_url = data.get("manifest_url")
+        self.pending_manifest_urls = data.get("manifest_urls") or ([data["manifest_url"]] if data.get("manifest_url") else [])
         self.pending_installer_url = data.get("installer_url")
         self.pending_version = data.get("version")
         if not self.silent_check or data.get("status") in ("available", "bootstrap"):
@@ -184,7 +203,7 @@ class SaveVidoWindow(QMainWindow):
         self.silent_check = False
 
     def install_update(self):
-        if not self.pending_manifest_url:
+        if not self.pending_manifest_urls:
             if self.pending_installer_url:
                 QDesktopServices.openUrl(QUrl(self.pending_installer_url))
             else:
@@ -192,9 +211,9 @@ class SaveVidoWindow(QMainWindow):
             return
         updater = APP_ROOT / "SaveVidoUpdater.exe"
         if getattr(sys, "frozen", False):
-            command = [str(updater), "--manifest-url", self.pending_manifest_url, "--app-root", str(APP_ROOT)]
+            command = [str(updater), "--manifest-urls", *self.pending_manifest_urls, "--app-root", str(APP_ROOT)]
         else:
-            command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-url", self.pending_manifest_url, "--app-root", str(APP_ROOT)]
+            command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-urls", *self.pending_manifest_urls, "--app-root", str(APP_ROOT)]
         self.update_status_file.parent.mkdir(parents=True, exist_ok=True)
         self.update_status_file.unlink(missing_ok=True)
         command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file), "--restart"]
