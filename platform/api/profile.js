@@ -43,8 +43,8 @@ module.exports=async function handler(req,res){
   }
   if(req.method==="GET"){
    const [profiles,prefs]=await Promise.all([
-    sql\`SELECT nickname,whatsapp_number,profile_reminders_enabled,last_profile_review_at,created_at,updated_at FROM savevido_user_profiles WHERE auth_user_id=\${id} LIMIT 1\`,
-    sql\`SELECT analytics_opt_in,location_sharing_enabled FROM savevido_privacy_preferences WHERE auth_user_id=\${id} LIMIT 1\`
+    sql`SELECT nickname,whatsapp_number,profile_reminders_enabled,last_profile_review_at,created_at,updated_at FROM savevido_user_profiles WHERE auth_user_id=${id} LIMIT 1`,
+    sql`SELECT analytics_opt_in,location_sharing_enabled FROM savevido_privacy_preferences WHERE auth_user_id=${id} LIMIT 1`
    ]);
    return send(res,200,{profile:profiles[0]||null,preferences:prefs[0]||{analytics_opt_in:false,location_sharing_enabled:false}});
   }
@@ -56,15 +56,15 @@ module.exports=async function handler(req,res){
   if(whatsapp&&!/^\+[1-9][0-9]{7,14}$/.test(whatsapp))return send(res,400,{error:"WhatsApp must use international format, e.g. +923001234567."});
   const analytics=body.analytics_opt_in===true,location=body.location_sharing_enabled===true;
   const reminders=body.profile_reminders_enabled!==false;
-  await sql\`INSERT INTO savevido_user_profiles(auth_user_id,nickname,whatsapp_number,contact_consent_at,profile_reminders_enabled,last_profile_review_at,updated_at)
-   VALUES(\${id},\${nickname},\${whatsapp||null},\${whatsapp?new Date().toISOString():null},\${reminders},NOW(),NOW())
+  await sql`INSERT INTO savevido_user_profiles(auth_user_id,nickname,whatsapp_number,contact_consent_at,profile_reminders_enabled,last_profile_review_at,updated_at)
+   VALUES(${id},${nickname},${whatsapp||null},${whatsapp?new Date().toISOString():null},${reminders},NOW(),NOW())
    ON CONFLICT(auth_user_id) DO UPDATE SET nickname=EXCLUDED.nickname,whatsapp_number=EXCLUDED.whatsapp_number,
    contact_consent_at=CASE WHEN EXCLUDED.whatsapp_number IS NULL THEN NULL ELSE COALESCE(savevido_user_profiles.contact_consent_at,NOW()) END,
-   profile_reminders_enabled=EXCLUDED.profile_reminders_enabled,last_profile_review_at=NOW(),updated_at=NOW()\`;
-  await sql\`INSERT INTO savevido_privacy_preferences(auth_user_id,analytics_opt_in,location_sharing_enabled,updated_at)
-   VALUES(\${id},\${analytics},\${location},NOW())
+   profile_reminders_enabled=EXCLUDED.profile_reminders_enabled,last_profile_review_at=NOW(),updated_at=NOW()`;
+  await sql`INSERT INTO savevido_privacy_preferences(auth_user_id,analytics_opt_in,location_sharing_enabled,updated_at)
+   VALUES(${id},${analytics},${location},NOW())
    ON CONFLICT(auth_user_id) DO UPDATE SET analytics_opt_in=EXCLUDED.analytics_opt_in,
-   location_sharing_enabled=EXCLUDED.location_sharing_enabled,updated_at=NOW()\`;
+   location_sharing_enabled=EXCLUDED.location_sharing_enabled,updated_at=NOW()`;
   return send(res,200,{ok:true,message:"Profile and privacy settings saved."});
  }catch(error){
   const message=String(error.message||"");
