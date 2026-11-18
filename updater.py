@@ -32,7 +32,8 @@ def safe_target(root: Path, name: str) -> Path:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--manifest-url", required=True)
+    parser.add_argument("--manifest-urls", nargs="+", required=True)
+    parser.add_argument("--base-version", required=True)
     parser.add_argument("--app-root", required=True)
     parser.add_argument("--restart", action="store_true")
     parser.add_argument("--wait-pid", type=int, default=0)
@@ -82,39 +83,71 @@ def main() -> int:
             time.sleep(2)
 
     try:
-        write_status("downloading", message="Getting update information", percent=0)
-        manifest_file = temp / "manifest.json"
-        fetch(args.manifest_url, manifest_file)
-        manifest = json.loads(manifest_file.read_text(encoding="utf-8-sig"))
-        version = str(manifest.get("version", ""))
-        patch_url = str(manifest.get("patch_url", ""))
-        expected = str(manifest.get("patch_sha256", "")).lower()
-        if not version or not patch_url.startswith("https://") or len(expected) != 64:
-            raise ValueError("The update manifest is incomplete or invalid")
+        manifest_chain = []
+        expected_base = str(args.base_version)
+        for manifest_index, manifest_url in enumerate(args.manifest_urls):
+            manifest_file = temp / f"manifest-{manifest_index}.json"
+            write_status("downloading", message=f"Getting update information ({manifest_index + 1}/{len(args.manifest_urls)})", percent=int(manifest_index * 100 / len(args.manifest_urls)))
+            fetch(manifest_url, manifest_file)
+            item = json.loads(manifest_file.read_text(encoding="utf-8-sig"))
+            item_version = str(item.get("version") or "")
+            item_base = str(item.get("base_version") or "")
+            patch_url = str(item.get("patch_url") or "")
+            expected_hash = str(item.get("patch_sha256") or "").lower()
+            if not item_version or item_base != expected_base or not patch_url.startswith("https://") or len(expected_hash) != 64:
+                raise ValueError("The incremental update chain is incomplete or does not match this SaveVido version")
+            manifest_chain.append(item)
+            expected_base = item_version
 
-        patch = temp / "update.zip"
-        request = urllib.request.Request(patch_url, headers={"User-Agent": "SaveVido-Updater"})
-        with urllib.request.urlopen(request, timeout=60) as response, patch.open("wb") as output:
-            total = int(response.headers.get("Content-Length") or 0)
-            downloaded = 0
-            while True:
-                chunk = response.read(256 * 1024)
-                if not chunk:
-                    break
-                output.write(chunk)
-                downloaded += len(chunk)
-                percent = int(downloaded * 100 / total) if total else 0
-                write_status("downloading", message="Downloading update files", version=version, percent=min(percent, 99))
-        write_status("verifying", message="Verifying update package", version=version, percent=100)
-        hasher = hashlib.sha256()
-        with patch.open("rb") as stream:
-            for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                hasher.update(chunk)
-        if hasher.hexdigest() != expected:
-            raise ValueError("Update package verification failed")
+        version = str(manifest_chain[-1]["version"])
+        staged_files = {}
+        deleted = set()
+        for patch_index, item in enumerate(manifest_chain):
+            patch_url = str(item["patch_url"])
+            expected_hash = str(item["patch_sha256"]).lower()
+            patch = temp / f"update-{patch_index}.zip"
+            request = urllib.request.Request(patch_url, headers={"User-Agent": "SaveVido-Updater"})
+            with urllib.request.urlopen(request, timeout=60) as response, patch.open("wb") as output:
+                total = int(response.headers.get("Content-Length") or 0)
+                downloaded = 0
+                while True:
+                    chunk = response.read(256 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    downloaded += len(chunk)
+                    local_percent = int(downloaded * 100 / total) if total else 0
+                    overall = int((patch_index + min(local_percent, 99) / 100) * 100 / len(manifest_chain))
+                    write_status("downloading", message=f"Downloading update package {patch_index + 1}/{len(manifest_chain)}", version=version, percent=overall)
+            write_status("verifying", message=f"Verifying update package {patch_index + 1}/{len(manifest_chain)}", version=version, percent=int((patch_index + 1) * 100 / len(manifest_chain)))
+            hasher = hashlib.sha256()
+            with patch.open("rb") as stream:
+                for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+                    hasher.update(chunk)
+            if hasher.hexdigest() != expected_hash:
+                raise ValueError(f"Update package {patch_index + 1} failed SHA-256 verification")
 
-        write_status("ready", message="Update downloaded and verified", version=version, percent=100)
-        wait_for_parent()
+            payload_root = temp / f"payload-{patch_index}"
+            with zipfile.ZipFile(patch) as archive:
+                names = archive.namelist()
+                for name in names:
+                    safe_target(root, name)
+                for name in names:
+                    source = payload_root / Path(*PurePosixPath(name).parts)
+                    source.parent.mkdir(parents=True, exist_ok=True)
+                    with archive.open(name) as src, source.open("wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    staged_files[name] = source
+                    deleted.discard(name)
+            for name in item.get("delete", []):
+                safe_target(root, name)
+                staged_files.pop(name, None)
+                deleted.add(name)
+
+        changed = [(safe_target(root, name), source) for name, source in staged_files.items()]
+        created = []
+        deleted_backups = []
+        write_status("ready", message="All update files downloaded and verified", version=version, percent=100)
 
         # Wait for Windows to release the running executable before replacing files.
         for _ in range(90):
@@ -150,7 +183,7 @@ def main() -> int:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(source, target)
 
-            for name in manifest.get("delete", []):
+            for name in sorted(deleted):
                 target = safe_target(root, name)
                 if target.is_file():
                     saved = backup / Path(*PurePosixPath(name).parts)
