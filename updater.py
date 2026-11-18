@@ -128,28 +128,9 @@ def main() -> int:
                 raise ValueError(f"Update package {patch_index + 1} failed SHA-256 verification")
 
             payload_root = temp / f"payload-{patch_index}"
-            with zipfile.ZipFile(patch) as archive:
-                names = archive.namelist()
-                for name in names:
-                    safe_target(root, name)
-                for name in names:
-                    source = payload_root / Path(*PurePosixPath(name).parts)
-                    source.parent.mkdir(parents=True, exist_ok=True)
-                    with archive.open(name) as src, source.open("wb") as dst:
-                        shutil.copyfileobj(src, dst)
-                    staged_files[name] = source
-                    deleted.discard(name)
-            for name in item.get("delete", []):
-                safe_target(root, name)
-                staged_files.pop(name, None)
-                deleted.add(name)
-
-        changed = [(safe_target(root, name), source) for name, source in staged_files.items()]
-        created = []
-        deleted_backups = []
-        write_status("ready", message="All update files downloaded and verified", version=version, percent=100)
-
-        # Wait for Windows to release the running executable before replacing files.
+            # All patches have already been verified and staged in chain order.
+        # Wait for the parent process to exit before replacing any installed files.
+        wait_for_parent()
         for _ in range(90):
             try:
                 with open(exe, "ab"):
@@ -159,24 +140,6 @@ def main() -> int:
                 time.sleep(1)
         else:
             raise TimeoutError("SaveVido is still running. Close it and try again.")
-
-        with zipfile.ZipFile(patch) as archive:
-            names = archive.namelist()
-            for name in names:
-                safe_target(root, name)
-            for name in names:
-                target = safe_target(root, name)
-                source = temp / "payload" / Path(*PurePosixPath(name).parts)
-                source.parent.mkdir(parents=True, exist_ok=True)
-                with archive.open(name) as src, source.open("wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                if target.exists():
-                    saved = backup / Path(*PurePosixPath(name).parts)
-                    saved.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(target, saved)
-                else:
-                    created.append(target)
-                changed.append((target, source))
 
         try:
             for target, source in changed:
