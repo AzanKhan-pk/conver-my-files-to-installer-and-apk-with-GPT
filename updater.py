@@ -48,14 +48,14 @@ def main() -> int:
     created = []
     deleted_backups = []
 
-    def write_status(status: str, message: str = "", version: str = "") -> None:
+    def write_status(status: str, message: str = "", version: str = "", percent: int = 0) -> None:
         if not args.status_file:
             return
         try:
             status_path = Path(args.status_file)
             status_path.parent.mkdir(parents=True, exist_ok=True)
             status_path.write_text(json.dumps({
-                "status": status, "message": message, "version": version,
+                "status": status, "message": message, "version": version, "percent": int(percent),
             }), encoding="utf-8")
         except Exception:
             pass
@@ -82,7 +82,7 @@ def main() -> int:
             time.sleep(2)
 
     try:
-        wait_for_parent()
+        write_status("downloading", message="Getting update information", percent=0)
         manifest_file = temp / "manifest.json"
         fetch(args.manifest_url, manifest_file)
         manifest = json.loads(manifest_file.read_text(encoding="utf-8-sig"))
@@ -93,13 +93,28 @@ def main() -> int:
             raise ValueError("The update manifest is incomplete or invalid")
 
         patch = temp / "update.zip"
-        fetch(patch_url, patch)
+        request = urllib.request.Request(patch_url, headers={"User-Agent": "SaveVido-Updater"})
+        with urllib.request.urlopen(request, timeout=60) as response, patch.open("wb") as output:
+            total = int(response.headers.get("Content-Length") or 0)
+            downloaded = 0
+            while True:
+                chunk = response.read(256 * 1024)
+                if not chunk:
+                    break
+                output.write(chunk)
+                downloaded += len(chunk)
+                percent = int(downloaded * 100 / total) if total else 0
+                write_status("downloading", message="Downloading update files", version=version, percent=min(percent, 99))
+        write_status("verifying", message="Verifying update package", version=version, percent=100)
         hasher = hashlib.sha256()
         with patch.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 hasher.update(chunk)
         if hasher.hexdigest() != expected:
             raise ValueError("Update package verification failed")
+
+        write_status("ready", message="Update downloaded and verified", version=version, percent=100)
+        wait_for_parent()
 
         # Wait for Windows to release the running executable before replacing files.
         for _ in range(90):
@@ -161,7 +176,7 @@ def main() -> int:
                     target.unlink()
             raise
 
-        write_status("installed", version=version)
+        write_status("installed", message="Update completed successfully. Restart SaveVido to apply it.", version=version, percent=100)
         if args.restart and exe.exists():
             subprocess.Popen([str(exe)], cwd=str(root), close_fds=True)
         return 0
