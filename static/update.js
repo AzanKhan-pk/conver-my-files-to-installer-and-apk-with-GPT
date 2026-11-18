@@ -6,6 +6,7 @@
   const widget = document.createElement('div');
   widget.id = 'savevidoUpdateWidget';
   widget.innerHTML = `
+    <button type="button" id="savevidoCheckUpdate" title="Check for updates">Check for update</button>
     <button type="button" id="savevidoUpdateIcon" aria-label="Update progress" title="Update progress" hidden>
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span id="savevidoUpdatePercent"></span>
@@ -27,6 +28,7 @@
     </section>`;
   document.body.appendChild(widget);
 
+  const checkButton = widget.querySelector('#savevidoCheckUpdate');
   const panel = widget.querySelector('#savevidoUpdatePanel');
   const icon = widget.querySelector('#savevidoUpdateIcon');
   const percentLabel = widget.querySelector('#savevidoUpdatePercent');
@@ -52,6 +54,15 @@
     progressText.textContent = label || (pct + '% downloaded');
   };
 
+  checkButton.addEventListener('click', () => {
+    checkButton.disabled = true;
+    checkButton.textContent = 'Checking…';
+    show();
+    message.textContent = 'Checking for updates…';
+    details.textContent = 'Connecting securely to SaveVido release information.';
+    location.href = 'savevido://check-updates';
+    window.setTimeout(() => { checkButton.disabled = false; checkButton.textContent = 'Check for update'; }, 2500);
+  });
   close.addEventListener('click', hide);
   panel.addEventListener('click', event => {
     if (event.target === panel && !mandatory) hide();
@@ -107,6 +118,8 @@
     } else if (data.status === 'current') {
       mandatory = false;
       icon.hidden = true;
+      checkButton.disabled = false;
+      checkButton.textContent = 'Check for update';
       message.textContent = 'Your app is up to date.';
       details.textContent = 'You are using SaveVido ' + (data.current_version || '');
       if (!progressWrap.hidden) progressWrap.hidden = true;
