@@ -1,4 +1,3 @@
-const { createRemoteJWKSet, jwtVerify } = require("jose");
 const { getSql, send } = require("./_db");
 
 const ORIGINS = new Set(["https://savevido-central-platform.vercel.app"]);
@@ -16,6 +15,7 @@ function cors(req,res){
 }
 async function userId(req){
  if(!JWKS_URL)throw new Error("Auth verification is not configured");
+ const { createRemoteJWKSet, jwtVerify } = await import("jose");
  const token=String(req.headers.authorization||"").replace(/^Bearer\\s+/i,"");
  if(!token)throw new Error("Unauthorized");
  jwks ||= createRemoteJWKSet(new URL(JWKS_URL));
