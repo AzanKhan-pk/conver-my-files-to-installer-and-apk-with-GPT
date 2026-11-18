@@ -211,9 +211,9 @@ class SaveVidoWindow(QMainWindow):
             return
         updater = APP_ROOT / "SaveVidoUpdater.exe"
         if getattr(sys, "frozen", False):
-            command = [str(updater), "--manifest-urls", *self.pending_manifest_urls, "--app-root", str(APP_ROOT)]
+            command = [str(updater), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         else:
-            command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-urls", *self.pending_manifest_urls, "--app-root", str(APP_ROOT)]
+            command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         self.update_status_file.parent.mkdir(parents=True, exist_ok=True)
         self.update_status_file.unlink(missing_ok=True)
         command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file), "--restart"]
