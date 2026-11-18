@@ -54,7 +54,7 @@ module.exports=async function handler(req,res){
   const nickname=clean(body.nickname,40),whatsapp=clean(body.whatsapp_number,24);
   if(nickname.length<2)return send(res,400,{error:"Nickname must be 2–40 characters."});
   if(whatsapp&&!/^\+[1-9][0-9]{7,14}$/.test(whatsapp))return send(res,400,{error:"WhatsApp must use international format, e.g. +923001234567."});
-  const analytics=body.analytics_opt_in===true,location=body.location_sharing_enabled===true;
+  const contactConsent=body.whatsapp_contact_consent===true;\n  if(whatsapp&&!contactConsent)return send(res,400,{error:"Confirm that you want your WhatsApp number stored for support."});\n  const analytics=body.analytics_opt_in===true,location=body.location_sharing_enabled===true;
   const reminders=body.profile_reminders_enabled!==false;
   await sql`INSERT INTO savevido_user_profiles(auth_user_id,nickname,whatsapp_number,contact_consent_at,profile_reminders_enabled,last_profile_review_at,updated_at)
    VALUES(${id},${nickname},${whatsapp||null},${whatsapp?new Date().toISOString():null},${reminders},NOW(),NOW())
