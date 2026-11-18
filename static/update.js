@@ -120,8 +120,8 @@
       details.textContent = 'This installation is too far behind for a safe incremental patch. After this one-time update, compatible releases use changed files only.';
       install.hidden = false;
       install.textContent = 'Download full installer';
-      installAction = data.installer_url || '';
-      install.onclick = () => { if (installAction) location.href = installAction; };
+      installAction = 'savevido://download-full-installer';
+      install.onclick = null;
     } else {
       message.textContent = data.message || 'Could not check for updates. Please try again.';
     }
