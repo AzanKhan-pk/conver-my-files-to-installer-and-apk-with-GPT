@@ -120,6 +120,9 @@ class UpdatePage(QWebEnginePage):
                 self.window.install_update()
             elif url.host() == "restart-app":
                 self.window.restart_app()
+            elif url.host() == "download-full-installer":
+                if self.window.pending_installer_url:
+                    QDesktopServices.openUrl(QUrl(self.window.pending_installer_url))
             return False
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
