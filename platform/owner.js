@@ -7,7 +7,9 @@ async function load(){
   const r=await fetch(api,{headers:{Authorization:"Bearer "+token},cache:"no-store"});
   if(r.status===401)throw new Error("Your access token was not accepted.");
   if(!r.ok)throw new Error("Analytics service returned "+r.status);
-  const d=await r.json(),t=d.totals||{};
+  const d=await r.json(),t=d.totals||{},u=d.user_totals||{};
+  $("profiles-complete").textContent=Number(u.profiles_complete||0).toLocaleString();$("profiles-incomplete").textContent=Number(u.profiles_incomplete||0).toLocaleString();$("accounts-total").textContent=Number(u.total_accounts||0).toLocaleString();
+  $("users").innerHTML=(d.users||[]).map(x=>`<tr><td>${esc(x.email)}</td><td>${esc(x.nickname||"—")}</td><td>${esc(x.whatsapp_number||"—")}</td><td>${x.email_verified?"Yes":"No"}</td><td>${x.profile_complete?"Complete":"Incomplete"}</td><td>${esc(time(x.account_created_at))}</td></tr>`).join("")||`<tr><td colspan="6">No accounts yet</td></tr>`;
   $("downloads").textContent=Number(t.downloads||0).toLocaleString();$("views").textContent=Number(t.page_views||0).toLocaleString();
   $("visitors").textContent=Number(t.visitors||0).toLocaleString();$("active").textContent=Number(t.active_sessions||0).toLocaleString();
   $("updated").textContent="Updated "+new Date(d.generated_at).toLocaleTimeString();
