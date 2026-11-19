@@ -72,7 +72,7 @@ def pending_update_requirement():
         state = json.loads(state_file.read_text(encoding="utf-8"))
         version = str(state.get("version") or "")
         first_seen = float(state.get("first_seen") or 0)
-        if not version or first_seen <= 0:
+        if not version or first_seen <= 0 or version_tuple(version) <= version_tuple(APP_VERSION):
             return "", False
         return version, (time.time() - first_seen) >= 48 * 60 * 60
     except Exception:
