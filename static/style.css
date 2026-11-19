@@ -920,3 +920,32 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
 #savevidoCheckUpdate:disabled{opacity:.65;cursor:wait}
 #savevidoUpdateIcon{position:fixed;top:60px;right:18px;z-index:9998;display:flex;align-items:center;gap:5px;border:1px solid rgba(130,140,255,.45);border-radius:999px;padding:7px 10px;background:#171a2b;color:#fff;cursor:pointer}
 #savevidoUpdateIcon svg{width:17px;height:17px}
+
+
+/* Native desktop updater: keep controls in the header, not floating over page content. */
+.savevido-desktop #savevidoUpdateWidget{
+  display:flex;align-items:center;gap:12px;flex:0 0 auto;margin-left:8px;
+}
+.savevido-desktop #savevidoCheckUpdate{
+  position:static;z-index:auto;border:1px solid var(--line);border-radius:0;
+  padding:11px 15px;background:transparent;color:var(--ink);
+  font:inherit;font-size:12px;font-weight:600;line-height:1.2;letter-spacing:inherit;
+  box-shadow:none;white-space:nowrap;
+}
+.savevido-desktop #savevidoCheckUpdate:hover{border-color:var(--lime);color:var(--lime);background:transparent}
+.savevido-desktop #savevidoUpdateIcon{
+  position:static;z-index:auto;min-width:34px;min-height:34px;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:6px 8px;border:1px solid var(--line);border-radius:0;
+  background:transparent;color:var(--lime);box-shadow:none;
+}
+.savevido-desktop #savevidoUpdateIcon[hidden]{display:none}
+.savevido-desktop #savevidoUpdateIcon svg{width:18px;height:18px}
+.savevido-desktop #savevidoUpdatePercent{font:500 10px "DM Mono",monospace}
+.savevido-desktop .site-header{gap:18px}
+.savevido-desktop .site-header nav{gap:clamp(12px,2vw,30px)}
+.savevido-desktop .site-header > div{display:none!important}
+@media(max-width:1050px){
+  .savevido-desktop .site-header{flex-wrap:wrap;padding:12px 0}
+  .savevido-desktop #savevidoUpdateWidget{margin-left:auto}
+}
