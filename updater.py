@@ -162,7 +162,7 @@ def main() -> int:
                 staged.pop(PurePosixPath(str(name)).as_posix(), None)
             write_status("downloading", f"Downloaded and verified package {patch_index + 1}/{len(manifest_chain)}", int((patch_index + 1) * 80 / len(manifest_chain)))
 
-        write_status("ready", "Update files verified. SaveVido is closing before files are replaced.", 90)
+        write_status("ready", "Update files verified. Waiting for you to close SaveVido manually.", 90)
         wait_for_parent(args.wait_pid)
 
         # Ensure the executable is no longer locked before touching installed files.
