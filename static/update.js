@@ -73,7 +73,7 @@
   install.addEventListener('click', () => {
     install.disabled = true;
     install.textContent = 'Starting update…';
-    message.textContent = 'Downloading only the changed update files. SaveVido will close only after the download is verified.';
+    message.textContent = 'Downloading only the changed update files. SaveVido will stay open. You can close it manually after the download is verified.';
     show();
     location.href = installAction;
   });
@@ -157,7 +157,7 @@
 
   window.addEventListener('savevido-update-ready', event => {
     const data = event.detail || {};
-    setProgress(100, 'Download complete · Applying files…');
+    setProgress(100, 'Download complete · Ready to apply');
     message.textContent = 'Update downloaded and verified.';
     details.textContent = 'The changed files are downloaded and verified. Close SaveVido fully from the tray menu to apply them, then open it again. SaveVido will not close or restart itself.';
   });
