@@ -8,7 +8,7 @@ const ALLOWED_ORIGINS = new Set([
 ]);
 
 function clean(value, max) {
-  return String(value ?? "").replace(/[\\u0000-\\u001f\\u007f]/g, "").trim().slice(0, max);
+  return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, max);
 }
 function safeSourceUrl(value) {
   const raw = clean(value, 2048);
@@ -26,10 +26,10 @@ function safeSourceUrl(value) {
   } catch (_) { return null; }
 }
 function validEmail(value) {
-  return /^[^\\s@]+@[^\\s@]+\\.[^\\s@]{2,}$/.test(value) && value.length <= 254;
+  return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value) && value.length <= 254;
 }
 function validWhatsapp(value) {
-  return /^\\+[1-9][0-9]{7,14}$/.test(value);
+  return /^\+[1-9][0-9]{7,14}$/.test(value);
 }
 function cors(req, res) {
   const origin = String(req.headers.origin || "");
