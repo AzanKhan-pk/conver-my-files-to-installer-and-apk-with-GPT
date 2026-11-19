@@ -65,6 +65,19 @@ def update_is_mandatory(version):
             pass
     return now - first_seen >= 48 * 60 * 60
 
+def pending_update_requirement():
+    """Read the locally remembered 48-hour update deadline when offline."""
+    state_file = Path(savevido_app.APP_DATA_DIR) / "update-reminder.json"
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        version = str(state.get("version") or "")
+        first_seen = float(state.get("first_seen") or 0)
+        if not version or first_seen <= 0:
+            return "", False
+        return version, (time.time() - first_seen) >= 48 * 60 * 60
+    except Exception:
+        return "", False
+
 class UpdateChecker(QObject):
     finished = Signal(dict)
 
@@ -123,7 +136,7 @@ class UpdateChecker(QObject):
                 manifest_urls = [item[1] for item in reversed(chain)]
                 self.finished.emit({"status": "available", "version": tag, "manifest_urls": manifest_urls, "mandatory": update_is_mandatory(tag)})
             except Exception as exc:
-                self.finished.emit({"status": "error", "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
+                pending_version, mandatory = pending_update_requirement()\n                self.finished.emit({"status": "error", "version": pending_version, "mandatory": mandatory, "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
         threading.Thread(target=worker, name="SaveVidoUpdateCheck", daemon=True).start()
 
 server = make_server(HOST, PORT, app, threaded=True)
@@ -202,7 +215,7 @@ class SaveVidoWindow(QMainWindow):
         self.pending_manifest_urls = data.get("manifest_urls") or ([data["manifest_url"]] if data.get("manifest_url") else [])
         self.pending_installer_url = data.get("installer_url")
         self.pending_version = data.get("version")
-        if not self.silent_check or data.get("status") in ("available", "bootstrap"):
+        if not self.silent_check or data.get("status") in ("available", "bootstrap") or data.get("mandatory"):
             self.dispatch("savevido-update-result", data)
         self.silent_check = False
 
