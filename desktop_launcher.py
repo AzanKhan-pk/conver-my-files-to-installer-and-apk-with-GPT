@@ -136,7 +136,8 @@ class UpdateChecker(QObject):
                 manifest_urls = [item[1] for item in reversed(chain)]
                 self.finished.emit({"status": "available", "version": tag, "manifest_urls": manifest_urls, "mandatory": update_is_mandatory(tag)})
             except Exception as exc:
-                pending_version, mandatory = pending_update_requirement()\n                self.finished.emit({"status": "error", "version": pending_version, "mandatory": mandatory, "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
+                pending_version, mandatory = pending_update_requirement()
+                self.finished.emit({"status": "error", "version": pending_version, "mandatory": mandatory, "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
         threading.Thread(target=worker, name="SaveVidoUpdateCheck", daemon=True).start()
 
 server = make_server(HOST, PORT, app, threaded=True)
