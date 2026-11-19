@@ -48,15 +48,17 @@ def wait_for_parent(pid: int) -> None:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.OpenProcess.restype = ctypes.c_void_p
         handle = kernel32.OpenProcess(0x00100000, False, pid)
-        if handle:
-            try:
-                result = kernel32.WaitForSingleObject(handle, 120000)
-                if result == 0x00000102:
-                    raise TimeoutError("SaveVido did not close in time. Close it and try again.")
-            finally:
-                kernel32.CloseHandle(handle)
-        else:
-            time.sleep(1)
+        if not handle:
+            error = ctypes.get_last_error()
+            if error == 87:  # ERROR_INVALID_PARAMETER: the parent already exited.
+                return
+            raise OSError(error, "Could not safely wait for SaveVido to close; update was not applied.")
+        try:
+            result = kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
+            if result != 0:
+                raise OSError(ctypes.get_last_error(), "Could not confirm that SaveVido has closed; update was not applied.")
+        finally:
+            kernel32.CloseHandle(handle)
     else:
         time.sleep(2)
 
