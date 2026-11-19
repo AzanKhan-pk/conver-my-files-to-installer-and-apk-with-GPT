@@ -949,3 +949,17 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
   .savevido-desktop .site-header{flex-wrap:wrap;padding:12px 0}
   .savevido-desktop #savevidoUpdateWidget{margin-left:auto}
 }
+
+
+/* Feedback form: keep contact details and optional one-time location clear. */
+.support-contact button.support-contact-link{
+  appearance:none;background:transparent;font:inherit;cursor:pointer;
+}
+.feedback-location-choice{
+  display:flex;align-items:flex-start;gap:12px;margin:0 0 18px;
+  color:var(--muted);font-size:12px;line-height:1.6;cursor:pointer;
+}
+.feedback-location-choice input{
+  flex:0 0 auto;width:16px;height:16px;margin:2px 0 0;accent-color:var(--lime);
+}
+.feedback-privacy-note{margin:0 0 18px;color:var(--muted);font-size:11px;line-height:1.6}
