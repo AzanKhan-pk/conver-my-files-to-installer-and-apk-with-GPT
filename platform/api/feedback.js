@@ -10,6 +10,9 @@ const ALLOWED_ORIGINS = new Set([
 function clean(value, max) {
   return String(value ?? "").replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, max);
 }
+function cleanText(value, max) {
+  return String(value ?? "").replace(/\r\n?/g, "\n").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, "").trim().slice(0, max);
+}
 function safeSourceUrl(value) {
   const raw = clean(value, 2048);
   if (!raw) return null;
@@ -55,7 +58,7 @@ module.exports = async function handler(req, res) {
     const nickname = clean(body.nickname, 80);
     const email = clean(body.email, 254).toLowerCase();
     const whatsapp = clean(body.whatsapp_number, 24);
-    const message = clean(body.message, 4000);
+    const message = cleanText(body.message, 4000);
     if (nickname.length < 2) return send(res, 400, { error: "Please enter your name (at least 2 characters)." });
     if (!message || message.length < 3) return send(res, 400, { error: "Please enter your feedback message." });
     if (!email && !whatsapp) return send(res, 400, { error: "Enter an email address or WhatsApp number." });
@@ -70,7 +73,7 @@ module.exports = async function handler(req, res) {
     }
     const sourceUrl = safeSourceUrl(body.source_url);
     const sourceApp = clean(body.source_app, 120) || "SaveVido";
-    const errorDetails = clean(body.error_details, 2000);
+    const errorDetails = cleanText(body.error_details, 2000);
     const sql = getSql();
     await sql`INSERT INTO savevido_feedbacks
       (nickname,email,whatsapp_number,message,source_url,source_app,error_details,
