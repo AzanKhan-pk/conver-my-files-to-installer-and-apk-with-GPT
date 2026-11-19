@@ -944,7 +944,7 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
 .savevido-desktop #savevidoUpdatePercent{font:500 10px "DM Mono",monospace}
 .savevido-desktop .site-header{gap:18px}
 .savevido-desktop .site-header nav{gap:clamp(12px,2vw,30px)}
-.savevido-desktop .site-header > div{display:none!important}
+.savevido-desktop .site-header > div:not(#savevidoUpdateWidget){display:none!important}
 @media(max-width:1050px){
   .savevido-desktop .site-header{flex-wrap:wrap;padding:12px 0}
   .savevido-desktop #savevidoUpdateWidget{margin-left:auto}
