@@ -26,7 +26,9 @@ REPO = "AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT"
 RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
-ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
+ICON_PATH = RESOURCE_ROOT / "static" / "savevido.ico"
+if not ICON_PATH.is_file():
+    ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
 
 def read_app_version():
     try:
@@ -218,7 +220,7 @@ class SaveVidoWindow(QMainWindow):
             command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         self.update_status_file.parent.mkdir(parents=True, exist_ok=True)
         self.update_status_file.unlink(missing_ok=True)
-        command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file), "--restart"]
+        command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file)]
         if not Path(command[0]).exists():
             self.dispatch("savevido-update-result", {"status": "error", "message": "The updater component is missing. Please install the latest full SaveVido setup once."})
             return
