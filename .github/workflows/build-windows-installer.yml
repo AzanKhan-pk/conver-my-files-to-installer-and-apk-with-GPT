@@ -17,6 +17,7 @@ on:
       - "static/**"
       - "installer/**"
       - "platform/**"
+      - "!platform/release-config.json"
       - ".github/workflows/build-windows-installer.yml"
 
 permissions:
