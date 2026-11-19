@@ -23,7 +23,6 @@
           <p id="savevidoUpdateProgressText">0% downloaded</p>
         </div>
         <button type="button" id="savevidoInstallUpdate" hidden>Install update</button>
-        <button type="button" id="savevidoRestartUpdate" hidden>Restart SaveVido</button>
       </div>
     </section>`;
   const header = document.querySelector('.site-header');
@@ -42,7 +41,6 @@
   const progressFill = widget.querySelector('#savevidoUpdateFill');
   const progressText = widget.querySelector('#savevidoUpdateProgressText');
   const install = widget.querySelector('#savevidoInstallUpdate');
-  const restart = widget.querySelector('#savevidoRestartUpdate');
   const close = widget.querySelector('.savevido-update-close');
   let mandatory = false;
   let installAction = 'savevido://install-update';
@@ -79,11 +77,6 @@
     show();
     location.href = installAction;
   });
-  restart.addEventListener('click', () => {
-    restart.disabled = true;
-    restart.textContent = 'Restarting…';
-    location.href = 'savevido://restart-app';
-  });
 
   document.addEventListener('click', event => {
     if (!mandatory || panel.contains(event.target)) return;
@@ -113,7 +106,6 @@
     close.hidden = mandatory;
     show();
     install.hidden = true;
-    restart.hidden = true;
     install.disabled = false;
     install.textContent = 'Install update';
     if (data.status === 'checking') {
@@ -167,7 +159,7 @@
     const data = event.detail || {};
     setProgress(100, 'Download complete · Applying files…');
     message.textContent = 'Update downloaded and verified.';
-    details.textContent = 'SaveVido is closing briefly to replace the changed files.';
+    details.textContent = 'The changed files are ready. Close SaveVido fully from the tray menu to finish applying them. The app will not restart automatically.';
   });
 
   window.addEventListener('savevido-update-installed', event => {
@@ -177,10 +169,7 @@
     show();
     setProgress(100, 'Update completed');
     message.textContent = 'Update completed successfully!';
-    details.textContent = 'SaveVido ' + (data.version || '') + ' is ready. Restart SaveVido to apply the update.';
-    restart.hidden = false;
-    restart.disabled = false;
-    restart.textContent = 'Restart SaveVido';
+    details.textContent = 'SaveVido ' + (data.version || '') + ' is installed. Close and open the app again to use the updated version.';
   });
 
   window.addEventListener('savevido-update-failed', event => {
