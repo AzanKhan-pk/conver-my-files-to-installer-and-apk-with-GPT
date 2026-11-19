@@ -132,7 +132,7 @@
       installAction = 'savevido://download-full-installer';
       install.onclick = null;
     } else {
-      message.textContent = data.message || 'Could not check for updates. Please try again.';
+      message.textContent = mandatory ? ('Update ' + (data.version || '') + ' is overdue. Connect to the internet and check again to install it.') : (data.message || 'Could not check for updates. Please try again.');
     }
   });
 
