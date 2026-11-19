@@ -12,6 +12,10 @@ const resultBox = $("#result");
 const useBrowserSession = $("#useBrowserSession");
 const browserChoice = $("#browserChoice");
 const browserChoiceWrap = $("#browserChoiceWrap");
+const accountLink = $("#accountLink");
+if (accountLink && new URLSearchParams(window.location.search).has("desktop")) {
+  accountLink.addEventListener("click", (event) => { event.preventDefault(); window.location.href = "savevido://account"; });
+}
 
 let selectedMode = "video";
 let selectedQuality = "720p";
@@ -645,57 +649,97 @@ function disableDownloadControls(panel) {
   panel.querySelectorAll(".download-progress-actions button").forEach(button => { button.disabled = true; });
 }
 
-$("#commentForm").addEventListener("submit", async (event) => {
+const feedbackEndpoint = "https://savevido-owner-dashboard.vercel.app/api/feedback";
+const feedbackForm = $("#commentForm");
+const feedbackStatus = $("#commentStatus");
+const supportFeedbackButton = $("#supportFeedbackBtn");
+
+supportFeedbackButton?.addEventListener("click", () => {
+  const sourceUrl = ($("#url")?.value || "").trim();
+  const sourceError = ($("#status")?.textContent || "").trim();
+  const sourceHost = (() => { try { return new URL(sourceUrl).hostname; } catch (_) { return "Not provided"; } })();
+  $("#comment").value =
+    "Url: " + (sourceUrl || "Not provided") +
+    "\nSite/App: SaveVido Windows app" +
+    "\nError: " + (sourceError || "Please describe the problem below.") +
+    "\n\nAdditional details: ";
+  feedbackForm?.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#comment")?.focus();
+  if (feedbackStatus) {
+    feedbackStatus.textContent = "The support note has been added. Add your name, email or WhatsApp, and any extra details.";
+    feedbackStatus.className = "status";
+  }
+});
+
+function getOneTimeFeedbackLocation() {
+  return new Promise(resolve => {
+    if (!navigator.geolocation) return resolve(null);
+    navigator.geolocation.getCurrentPosition(
+      position => resolve({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        location_accuracy_m: position.coords.accuracy
+      }),
+      () => resolve(null),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
+    );
+  });
+}
+
+feedbackForm?.addEventListener("submit", async event => {
   event.preventDefault();
-
   const form = event.currentTarget;
-  const submitButton = form.querySelector("button");
-  const commentStatus = $("#commentStatus");
+  const submitButton = form.querySelector('button[type="submit"]');
+  const nickname = $("#name").value.trim();
+  const email = $("#feedbackEmail").value.trim();
+  const whatsapp = $("#feedbackWhatsapp").value.trim();
+  const message = $("#comment").value.trim();
+  const locationConsent = $("#feedbackLocationConsent").checked;
 
-  const name = $("#name").value.trim();
-  const comment = $("#comment").value.trim();
-
-  if (!name || !comment) {
-    commentStatus.textContent = "Please complete both fields.";
-    commentStatus.className = "status error";
+  if (nickname.length < 2 || !message || (!email && !whatsapp)) {
+    feedbackStatus.textContent = "Enter your name, message, and at least one contact method (email or WhatsApp).";
+    feedbackStatus.className = "status error";
     return;
   }
 
   submitButton.disabled = true;
-  submitButton.textContent = "Saving...";
-
-  commentStatus.textContent = "Saving your note...";
-  commentStatus.className = "status";
+  submitButton.textContent = "Sending feedback…";
+  feedbackStatus.textContent = locationConsent
+    ? "Requesting one-time location permission, then sending your feedback…"
+    : "Sending your feedback securely…";
+  feedbackStatus.className = "status";
 
   try {
-    const response = await fetch("/api/comments", {
+    const location = locationConsent ? await getOneTimeFeedbackLocation() : null;
+    const text = message;
+    const urlMatch = text.match(/^Url:\s*(https?:\/\/\S+)/im);
+    const appMatch = text.match(/^Site\/App:\s*(.+)$/im);
+    const errorMatch = text.match(/^Error:\s*([\s\S]*?)(?:\n\s*\n|$)/im);
+    const response = await fetch(feedbackEndpoint, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        name,
-        comment
+        nickname,
+        email,
+        whatsapp_number: whatsapp,
+        message,
+        source_url: urlMatch ? urlMatch[1] : "",
+        source_app: appMatch ? appMatch[1].trim() : "SaveVido",
+        error_details: errorMatch ? errorMatch[1].trim() : "",
+        location_consent: locationConsent && Boolean(location),
+        ...(location || {}),
+        website: $("#feedbackWebsite").value
       })
     });
-
     const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        data.error || "Could not save your feedback."
-      );
-    }
-
-    commentStatus.textContent =
-      data.message || "Thanks, your feedback is saved.";
-    commentStatus.className = "status success";
-
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not save your feedback.");
+    feedbackStatus.textContent = data.message || "Thank you. Your feedback was saved securely.";
+    if (locationConsent && !location) feedbackStatus.textContent += " Your browser did not share location, so no location was stored.";
+    feedbackStatus.className = "status success";
     form.reset();
   } catch (error) {
-    commentStatus.textContent =
-      error.message || "Could not save your feedback.";
-    commentStatus.className = "status error";
+    feedbackStatus.textContent = error.message || "Could not save your feedback.";
+    feedbackStatus.className = "status error";
   } finally {
     submitButton.disabled = false;
     submitButton.innerHTML = "Send feedback <span>↗</span>";

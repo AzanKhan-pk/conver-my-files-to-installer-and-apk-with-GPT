@@ -1,5 +1,5 @@
 """SaveVido native Windows desktop launcher with incremental update support."""
-import json, os, re, subprocess, sys, threading, time
+import json, os, re, shutil, subprocess, sys, threading, time
 from pathlib import Path
 if sys.platform == "win32":
     try:
@@ -26,7 +26,9 @@ REPO = "AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT"
 RELEASE_API = f"https://api.github.com/repos/{REPO}/releases/latest"
 APP_ROOT = Path(sys.executable).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 RESOURCE_ROOT = Path(getattr(sys, "_MEIPASS", APP_ROOT))
-ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
+ICON_PATH = RESOURCE_ROOT / "static" / "savevido.ico"
+if not ICON_PATH.is_file():
+    ICON_PATH = RESOURCE_ROOT / "static" / "icon-512.png"
 
 def read_app_version():
     try:
@@ -62,6 +64,19 @@ def update_is_mandatory(version):
         except OSError:
             pass
     return now - first_seen >= 48 * 60 * 60
+
+def pending_update_requirement():
+    """Read the locally remembered 48-hour update deadline when offline."""
+    state_file = Path(savevido_app.APP_DATA_DIR) / "update-reminder.json"
+    try:
+        state = json.loads(state_file.read_text(encoding="utf-8"))
+        version = str(state.get("version") or "")
+        first_seen = float(state.get("first_seen") or 0)
+        if not version or first_seen <= 0 or version_tuple(version) <= version_tuple(APP_VERSION):
+            return "", False
+        return version, (time.time() - first_seen) >= 48 * 60 * 60
+    except Exception:
+        return "", False
 
 class UpdateChecker(QObject):
     finished = Signal(dict)
@@ -121,7 +136,8 @@ class UpdateChecker(QObject):
                 manifest_urls = [item[1] for item in reversed(chain)]
                 self.finished.emit({"status": "available", "version": tag, "manifest_urls": manifest_urls, "mandatory": update_is_mandatory(tag)})
             except Exception as exc:
-                self.finished.emit({"status": "error", "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
+                pending_version, mandatory = pending_update_requirement()
+                self.finished.emit({"status": "error", "version": pending_version, "mandatory": mandatory, "message": f"Update check failed: {exc}. Please check your internet connection and try again."})
         threading.Thread(target=worker, name="SaveVidoUpdateCheck", daemon=True).start()
 
 server = make_server(HOST, PORT, app, threaded=True)
@@ -139,6 +155,8 @@ class UpdatePage(QWebEnginePage):
                 self.window.install_update()
             elif url.host() == "restart-app":
                 self.window.restart_app()
+            elif url.host() == "account":
+                QDesktopServices.openUrl(QUrl("https://savevido-central-platform.vercel.app/account.html"))
             elif url.host() == "download-full-installer":
                 if self.window.pending_installer_url:
                     QDesktopServices.openUrl(QUrl(self.window.pending_installer_url))
@@ -198,7 +216,7 @@ class SaveVidoWindow(QMainWindow):
         self.pending_manifest_urls = data.get("manifest_urls") or ([data["manifest_url"]] if data.get("manifest_url") else [])
         self.pending_installer_url = data.get("installer_url")
         self.pending_version = data.get("version")
-        if not self.silent_check or data.get("status") in ("available", "bootstrap"):
+        if not self.silent_check or data.get("status") in ("available", "bootstrap") or data.get("mandatory"):
             self.dispatch("savevido-update-result", data)
         self.silent_check = False
 
@@ -211,12 +229,18 @@ class SaveVidoWindow(QMainWindow):
             return
         updater = APP_ROOT / "SaveVidoUpdater.exe"
         if getattr(sys, "frozen", False):
-            command = [str(updater), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
+            # Run the helper from the user-data folder so the delta can safely
+            # replace SaveVidoUpdater.exe inside the installation directory.
+            helper_dir = Path(savevido_app.APP_DATA_DIR) / "updater-cache"
+            helper_dir.mkdir(parents=True, exist_ok=True)
+            helper_copy = helper_dir / f"SaveVidoUpdater-{os.getpid()}.exe"
+            shutil.copy2(updater, helper_copy)
+            command = [str(helper_copy), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         else:
             command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         self.update_status_file.parent.mkdir(parents=True, exist_ok=True)
         self.update_status_file.unlink(missing_ok=True)
-        command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file), "--restart"]
+        command += ["--wait-pid", str(os.getpid()), "--status-file", str(self.update_status_file)]
         if not Path(command[0]).exists():
             self.dispatch("savevido-update-result", {"status": "error", "message": "The updater component is missing. Please install the latest full SaveVido setup once."})
             return
@@ -242,7 +266,7 @@ class SaveVidoWindow(QMainWindow):
             self.update_poll.stop()
             self.dispatch("savevido-update-ready", data)
             self.update_status_file.unlink(missing_ok=True)
-            self.qt_app.quit()
+            # Keep SaveVido open; the updater waits until the user exits manually.
         elif state == "failed":
             self.update_poll.stop()
             self.dispatch("savevido-update-failed", data)

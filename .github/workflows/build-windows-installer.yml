@@ -7,6 +7,7 @@ on:
   push:
     branches:
       - savevido-central-platform
+      - feature/privacy-location-consent
     paths:
       - "app.py"
       - "desktop_launcher.py"
@@ -15,6 +16,8 @@ on:
       - "templates/**"
       - "static/**"
       - "installer/**"
+      - "platform/**"
+      - "!platform/release-config.json"
       - ".github/workflows/build-windows-installer.yml"
 
 permissions:
@@ -22,8 +25,8 @@ permissions:
 
 concurrency:
   group: savevido-windows-${{ github.ref }}
-  # Queue newer commits instead of canceling an installer during compression.
-  cancel-in-progress: false
+  # Only the latest source commit for this branch should publish a release.
+  cancel-in-progress: true
 
 jobs:
   windows-installer:
@@ -46,6 +49,22 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements-windows.txt
+
+      - name: Validate JavaScript and Python source
+        shell: pwsh
+        run: |
+          node --check static/script.js
+          if ($LASTEXITCODE -ne 0) { throw "static/script.js syntax check failed." }
+          node --check static/update.js
+          if ($LASTEXITCODE -ne 0) { throw "static/update.js syntax check failed." }
+          node --check platform/api/feedback.js
+          if ($LASTEXITCODE -ne 0) { throw "platform/api/feedback.js syntax check failed." }
+          node --check platform/api/metrics.js
+          if ($LASTEXITCODE -ne 0) { throw "platform/api/metrics.js syntax check failed." }
+          node --check platform/owner.js
+          if ($LASTEXITCODE -ne 0) { throw "platform/owner.js syntax check failed." }
+          python -m py_compile app.py desktop_launcher.py updater.py
+          if ($LASTEXITCODE -ne 0) { throw "Python source compile check failed." }
 
       - name: Verify Qt WebEngine imports
         shell: pwsh
@@ -266,7 +285,7 @@ jobs:
       - name: Prepare changed-files update package
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
@@ -351,7 +370,7 @@ jobs:
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           $tag = "v$version"

@@ -6,7 +6,8 @@
   const widget = document.createElement('div');
   widget.id = 'savevidoUpdateWidget';
   widget.innerHTML = `
-    <button type="button" id="savevidoUpdateIcon" aria-label="Update progress" title="Update progress" hidden>
+    <button type="button" id="savevidoCheckUpdate" title="Check for updates">Check for update</button>
+    <button type="button" id="savevidoUpdateIcon" aria-label="Update progress" title="Update progress">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span id="savevidoUpdatePercent"></span>
     </button>
@@ -22,11 +23,15 @@
           <p id="savevidoUpdateProgressText">0% downloaded</p>
         </div>
         <button type="button" id="savevidoInstallUpdate" hidden>Install update</button>
-        <button type="button" id="savevidoRestartUpdate" hidden>Restart SaveVido</button>
       </div>
     </section>`;
-  document.body.appendChild(widget);
+  const header = document.querySelector('.site-header');
+  const headerActions = header && header.querySelector(':scope > div');
+  if (header && headerActions) header.insertBefore(widget, headerActions);
+  else if (header) header.appendChild(widget);
+  else document.body.appendChild(widget);
 
+  const checkButton = widget.querySelector('#savevidoCheckUpdate');
   const panel = widget.querySelector('#savevidoUpdatePanel');
   const icon = widget.querySelector('#savevidoUpdateIcon');
   const percentLabel = widget.querySelector('#savevidoUpdatePercent');
@@ -36,7 +41,6 @@
   const progressFill = widget.querySelector('#savevidoUpdateFill');
   const progressText = widget.querySelector('#savevidoUpdateProgressText');
   const install = widget.querySelector('#savevidoInstallUpdate');
-  const restart = widget.querySelector('#savevidoRestartUpdate');
   const close = widget.querySelector('.savevido-update-close');
   let mandatory = false;
   let installAction = 'savevido://install-update';
@@ -52,6 +56,15 @@
     progressText.textContent = label || (pct + '% downloaded');
   };
 
+  checkButton.addEventListener('click', () => {
+    checkButton.disabled = true;
+    checkButton.textContent = 'Checking…';
+    show();
+    message.textContent = 'Checking for updates…';
+    details.textContent = 'Connecting securely to SaveVido release information.';
+    location.href = 'savevido://check-updates';
+    window.setTimeout(() => { checkButton.disabled = false; checkButton.textContent = 'Check for update'; }, 2500);
+  });
   close.addEventListener('click', hide);
   panel.addEventListener('click', event => {
     if (event.target === panel && !mandatory) hide();
@@ -60,18 +73,13 @@
   install.addEventListener('click', () => {
     install.disabled = true;
     install.textContent = 'Starting update…';
-    message.textContent = 'Downloading only the changed update files. SaveVido will close only after the download is verified.';
+    message.textContent = 'Downloading only the changed update files. SaveVido will stay open. You can close it manually after the download is verified.';
     show();
     location.href = installAction;
   });
-  restart.addEventListener('click', () => {
-    restart.disabled = true;
-    restart.textContent = 'Restarting…';
-    location.href = 'savevido://restart-app';
-  });
 
   document.addEventListener('click', event => {
-    if (!mandatory || panel.contains(event.target)) return;
+    if (!mandatory || panel.contains(event.target) || event.target === checkButton) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     show();
@@ -98,7 +106,6 @@
     close.hidden = mandatory;
     show();
     install.hidden = true;
-    restart.hidden = true;
     install.disabled = false;
     install.textContent = 'Install update';
     if (data.status === 'checking') {
@@ -106,7 +113,9 @@
       details.textContent = 'Connecting securely to SaveVido release information.';
     } else if (data.status === 'current') {
       mandatory = false;
-      icon.hidden = true;
+      percentLabel.textContent = '';
+      checkButton.disabled = false;
+      checkButton.textContent = 'Check for update';
       message.textContent = 'Your app is up to date.';
       details.textContent = 'You are using SaveVido ' + (data.current_version || '');
       if (!progressWrap.hidden) progressWrap.hidden = true;
@@ -123,7 +132,7 @@
       installAction = 'savevido://download-full-installer';
       install.onclick = null;
     } else {
-      message.textContent = data.message || 'Could not check for updates. Please try again.';
+      message.textContent = mandatory ? ('Update ' + (data.version || '') + ' is overdue. Connect to the internet and check again to install it.') : (data.message || 'Could not check for updates. Please try again.');
     }
   });
 
@@ -135,7 +144,6 @@
     message.textContent = 'Downloading update files…';
     details.textContent = 'SaveVido stays open while the update is downloaded and verified.';
     install.hidden = true;
-    restart.hidden = true;
   });
 
   window.addEventListener('savevido-update-progress', event => {
@@ -148,9 +156,9 @@
 
   window.addEventListener('savevido-update-ready', event => {
     const data = event.detail || {};
-    setProgress(100, 'Download complete · Applying files…');
+    setProgress(100, 'Download complete · Ready to apply');
     message.textContent = 'Update downloaded and verified.';
-    details.textContent = 'SaveVido is closing briefly to replace the changed files.';
+    details.textContent = 'The changed files are downloaded and verified. Close SaveVido fully from the tray menu to apply them, then open it again. SaveVido will not close or restart itself.';
   });
 
   window.addEventListener('savevido-update-installed', event => {
@@ -160,18 +168,15 @@
     show();
     setProgress(100, 'Update completed');
     message.textContent = 'Update completed successfully!';
-    details.textContent = 'SaveVido ' + (data.version || '') + ' is ready. Restart SaveVido to apply the update.';
-    restart.hidden = false;
-    restart.disabled = false;
-    restart.textContent = 'Restart SaveVido';
+    details.textContent = 'SaveVido ' + (data.version || '') + ' is installed. Close and open the app again to use the updated version.';
   });
 
   window.addEventListener('savevido-update-failed', event => {
     const data = event.detail || {};
     show();
     install.hidden = true;
-    restart.hidden = true;
     message.textContent = 'The update could not be installed.';
     details.textContent = data.message || 'Your previous files were restored. Please try again.';
+    percentLabel.textContent = '';
   });
 })();

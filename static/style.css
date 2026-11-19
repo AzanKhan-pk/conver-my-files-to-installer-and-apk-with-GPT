@@ -913,3 +913,53 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
 .savevido-update-track span{display:block;width:0;height:100%;border-radius:10px;background:linear-gradient(90deg,#6865f2,#38c9b4);transition:width .2s}
 #savevidoUpdateProgressText{font-size:12px;color:#c4c8df}
 .savevido-update-details{color:#c4c8df;font-size:13px}
+
+/* Native desktop updater controls */
+#savevidoCheckUpdate{position:fixed;top:14px;right:16px;z-index:9998;border:1px solid rgba(130,140,255,.45);border-radius:999px;padding:9px 14px;background:#171a2b;color:#f7f7ff;font:600 12px/1.2 system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.24)}
+#savevidoCheckUpdate:hover{background:#252a43}
+#savevidoCheckUpdate:disabled{opacity:.65;cursor:wait}
+#savevidoUpdateIcon{position:fixed;top:60px;right:18px;z-index:9998;display:flex;align-items:center;gap:5px;border:1px solid rgba(130,140,255,.45);border-radius:999px;padding:7px 10px;background:#171a2b;color:#fff;cursor:pointer}
+#savevidoUpdateIcon svg{width:17px;height:17px}
+
+
+/* Native desktop updater: keep controls in the header, not floating over page content. */
+.savevido-desktop #savevidoUpdateWidget{
+  display:flex;align-items:center;gap:12px;flex:0 0 auto;margin-left:8px;
+}
+.savevido-desktop #savevidoCheckUpdate{
+  position:static;z-index:auto;border:1px solid var(--line);border-radius:0;
+  padding:11px 15px;background:transparent;color:var(--ink);
+  font:inherit;font-size:12px;font-weight:600;line-height:1.2;letter-spacing:inherit;
+  box-shadow:none;white-space:nowrap;
+}
+.savevido-desktop #savevidoCheckUpdate:hover{border-color:var(--lime);color:var(--lime);background:transparent}
+.savevido-desktop #savevidoUpdateIcon{
+  position:static;z-index:auto;min-width:34px;min-height:34px;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:6px 8px;border:1px solid var(--line);border-radius:0;
+  background:transparent;color:var(--lime);box-shadow:none;
+}
+.savevido-desktop #savevidoUpdateIcon[hidden]{display:none}
+.savevido-desktop #savevidoUpdateIcon svg{width:18px;height:18px}
+.savevido-desktop #savevidoUpdatePercent{font:500 10px "DM Mono",monospace}
+.savevido-desktop .site-header{gap:18px}
+.savevido-desktop .site-header nav{gap:clamp(12px,2vw,30px)}
+.savevido-desktop .site-header > div:not(#savevidoUpdateWidget){display:none!important}
+@media(max-width:1050px){
+  .savevido-desktop .site-header{flex-wrap:wrap;padding:12px 0}
+  .savevido-desktop #savevidoUpdateWidget{margin-left:auto}
+}
+
+
+/* Feedback form: keep contact details and optional one-time location clear. */
+.support-contact button.support-contact-link{
+  appearance:none;background:transparent;font:inherit;cursor:pointer;
+}
+.feedback-location-choice{
+  display:flex;align-items:flex-start;gap:12px;margin:0 0 18px;
+  color:var(--muted);font-size:12px;line-height:1.6;cursor:pointer;
+}
+.feedback-location-choice input{
+  flex:0 0 auto;width:16px;height:16px;margin:2px 0 0;accent-color:var(--lime);
+}
+.feedback-privacy-note{margin:0 0 18px;color:var(--muted);font-size:11px;line-height:1.6}
