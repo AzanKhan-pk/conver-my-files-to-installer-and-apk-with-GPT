@@ -2,7 +2,7 @@ const { timingSafeEqual } = require("node:crypto");
 const { getSql, send } = require("./_db");
 function authorized(req){
  const expected=process.env.ADMIN_DASHBOARD_TOKEN||"";
- const supplied=String(req.headers.authorization||"").replace(/^Bearer\\s+/i,"");
+ const supplied=String(req.headers.authorization||"").replace(/^Bearer\s+/i,"");
  if(!expected||!supplied)return false;
  const a=Buffer.from(expected),b=Buffer.from(supplied);
  return a.length===b.length&&timingSafeEqual(a,b);
