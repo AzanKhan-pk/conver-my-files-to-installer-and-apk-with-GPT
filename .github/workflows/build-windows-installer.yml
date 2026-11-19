@@ -284,7 +284,7 @@ jobs:
       - name: Prepare changed-files update package
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
@@ -369,7 +369,7 @@ jobs:
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           $tag = "v$version"
