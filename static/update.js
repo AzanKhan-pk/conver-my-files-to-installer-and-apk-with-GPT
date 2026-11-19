@@ -144,7 +144,6 @@
     message.textContent = 'Downloading update files…';
     details.textContent = 'SaveVido stays open while the update is downloaded and verified.';
     install.hidden = true;
-    restart.hidden = true;
   });
 
   window.addEventListener('savevido-update-progress', event => {
@@ -176,7 +175,6 @@
     const data = event.detail || {};
     show();
     install.hidden = true;
-    restart.hidden = true;
     message.textContent = 'The update could not be installed.';
     details.textContent = data.message || 'Your previous files were restored. Please try again.';
     icon.hidden = true;
