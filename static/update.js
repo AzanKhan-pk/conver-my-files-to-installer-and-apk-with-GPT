@@ -113,7 +113,7 @@
       details.textContent = 'Connecting securely to SaveVido release information.';
     } else if (data.status === 'current') {
       mandatory = false;
-      icon.hidden = true;
+      percentLabel.textContent = '';
       checkButton.disabled = false;
       checkButton.textContent = 'Check for update';
       message.textContent = 'Your app is up to date.';
@@ -177,6 +177,6 @@
     install.hidden = true;
     message.textContent = 'The update could not be installed.';
     details.textContent = data.message || 'Your previous files were restored. Please try again.';
-    icon.hidden = true;
+    percentLabel.textContent = '';
   });
 })();
