@@ -79,7 +79,7 @@
   });
 
   document.addEventListener('click', event => {
-    if (!mandatory || panel.contains(event.target)) return;
+    if (!mandatory || panel.contains(event.target) || event.target === checkButton) return;
     event.preventDefault();
     event.stopImmediatePropagation();
     show();
