@@ -1,5 +1,5 @@
 """SaveVido native Windows desktop launcher with incremental update support."""
-import json, os, re, subprocess, sys, threading, time
+import json, os, re, shutil, subprocess, sys, threading, time
 from pathlib import Path
 if sys.platform == "win32":
     try:
@@ -229,7 +229,13 @@ class SaveVidoWindow(QMainWindow):
             return
         updater = APP_ROOT / "SaveVidoUpdater.exe"
         if getattr(sys, "frozen", False):
-            command = [str(updater), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
+            # Run the helper from the user-data folder so the delta can safely
+            # replace SaveVidoUpdater.exe inside the installation directory.
+            helper_dir = Path(savevido_app.APP_DATA_DIR) / "updater-cache"
+            helper_dir.mkdir(parents=True, exist_ok=True)
+            helper_copy = helper_dir / f"SaveVidoUpdater-{os.getpid()}.exe"
+            shutil.copy2(updater, helper_copy)
+            command = [str(helper_copy), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         else:
             command = [sys.executable, str(APP_ROOT / "updater.py"), "--manifest-urls", *self.pending_manifest_urls, "--base-version", APP_VERSION, "--app-root", str(APP_ROOT)]
         self.update_status_file.parent.mkdir(parents=True, exist_ok=True)
