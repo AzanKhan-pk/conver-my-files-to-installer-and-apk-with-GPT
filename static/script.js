@@ -11,7 +11,11 @@ const statusBox = $("#status");
 const resultBox = $("#result");
 const useBrowserSession = $("#useBrowserSession");
 const browserChoice = $("#browserChoice");
-const browserChoiceWrap = $("#browserChoiceWrap");\nconst accountLink = $("#accountLink");\nif (accountLink && new URLSearchParams(window.location.search).has("desktop")) {\n  accountLink.addEventListener("click", (event) => { event.preventDefault(); window.location.href = "savevido://account"; });\n}
+const browserChoiceWrap = $("#browserChoiceWrap");
+const accountLink = $("#accountLink");
+if (accountLink && new URLSearchParams(window.location.search).has("desktop")) {
+  accountLink.addEventListener("click", (event) => { event.preventDefault(); window.location.href = "savevido://account"; });
+}
 
 let selectedMode = "video";
 let selectedQuality = "720p";
