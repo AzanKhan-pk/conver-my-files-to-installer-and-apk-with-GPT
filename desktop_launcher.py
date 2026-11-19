@@ -246,7 +246,7 @@ class SaveVidoWindow(QMainWindow):
             self.update_poll.stop()
             self.dispatch("savevido-update-ready", data)
             self.update_status_file.unlink(missing_ok=True)
-            self.qt_app.quit()
+            # Keep SaveVido open; the updater waits until the user exits manually.
         elif state == "failed":
             self.update_poll.stop()
             self.dispatch("savevido-update-failed", data)
