@@ -714,7 +714,7 @@ feedbackForm?.addEventListener("submit", async event => {
     const text = message;
     const urlMatch = text.match(/^Url:\s*(https?:\/\/\S+)/im);
     const appMatch = text.match(/^Site\/App:\s*(.+)$/im);
-    const errorMatch = text.match(/^Error:\s*([\\s\\S]*?)(?:\\n\\s*\\n|$)/im);
+    const errorMatch = text.match(/^Error:\s*([\s\S]*?)(?:\n\s*\n|$)/im);
     const response = await fetch(feedbackEndpoint, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
