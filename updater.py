@@ -14,10 +14,19 @@ import zipfile
 from pathlib import Path, PurePosixPath
 
 
-def fetch(url: str, destination: Path) -> None:
+def fetch(url: str, destination: Path, progress=None) -> None:
     request = urllib.request.Request(url, headers={"User-Agent": "SaveVido-Updater"})
     with urllib.request.urlopen(request, timeout=90) as response, destination.open("wb") as output:
-        shutil.copyfileobj(response, output)
+        total = int(response.headers.get("Content-Length") or 0)
+        downloaded = 0
+        while True:
+            chunk = response.read(64 * 1024)
+            if not chunk:
+                break
+            output.write(chunk)
+            downloaded += len(chunk)
+            if progress:
+                progress(downloaded, total)
 
 
 def safe_target(root: Path, name: str) -> Path:
@@ -109,7 +118,17 @@ def main() -> int:
 
         for patch_index, manifest in enumerate(manifest_chain):
             patch = temp / f"patch-{patch_index}.zip"
-            fetch(str(manifest["patch_url"]), patch)
+            def report_patch_progress(downloaded: int, total: int) -> None:
+                if total > 0:
+                    fraction = min(1.0, downloaded / total)
+                    percent = int(((patch_index + fraction) / len(manifest_chain)) * 78)
+                    label = f"Downloading changed files ({downloaded // 1024} KB / {total // 1024} KB)"
+                else:
+                    percent = int((patch_index / len(manifest_chain)) * 78)
+                    label = f"Downloading changed files ({downloaded // 1024} KB)"
+                write_status("downloading", label, percent)
+            fetch(str(manifest["patch_url"]), patch, report_patch_progress)
+            write_status("verifying", f"Verifying update package {patch_index + 1}/{len(manifest_chain)}", 80 + int((patch_index / len(manifest_chain)) * 8))
             digest = hashlib.sha256(patch.read_bytes()).hexdigest()
             if digest != str(manifest["patch_sha256"]).lower():
                 raise ValueError(f"Update package {patch_index + 1} failed SHA-256 verification.")
