@@ -26,7 +26,11 @@
         <button type="button" id="savevidoRestartUpdate" hidden>Restart SaveVido</button>
       </div>
     </section>`;
-  document.body.appendChild(widget);
+  const header = document.querySelector('.site-header');
+  const headerActions = header && header.querySelector(':scope > div');
+  if (header && headerActions) header.insertBefore(widget, headerActions);
+  else if (header) header.appendChild(widget);
+  else document.body.appendChild(widget);
 
   const checkButton = widget.querySelector('#savevidoCheckUpdate');
   const panel = widget.querySelector('#savevidoUpdatePanel');
@@ -186,5 +190,6 @@
     restart.hidden = true;
     message.textContent = 'The update could not be installed.';
     details.textContent = data.message || 'Your previous files were restored. Please try again.';
+    icon.hidden = true;
   });
 })();
