@@ -207,7 +207,10 @@ def main() -> int:
                     target.unlink()
             raise
 
-        write_status("installed", "Update completed successfully. Close SaveVido and open it again.", 100)
+        write_status("installed", "Update completed successfully. Open SaveVido again to use the new version.", 100)
+        if sys.platform == "win32":
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, "SaveVido update completed successfully. You can open SaveVido now.", "SaveVido Updater", 0x40)
         return 0
 
     except Exception as exc:
