@@ -7,7 +7,7 @@
   widget.id = 'savevidoUpdateWidget';
   widget.innerHTML = `
     <button type="button" id="savevidoCheckUpdate" title="Check for updates">Check for update</button>
-    <button type="button" id="savevidoUpdateIcon" aria-label="Update progress" title="Update progress" hidden>
+    <button type="button" id="savevidoUpdateIcon" aria-label="Update progress" title="Update progress">
       <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m-5-5 5 5 5-5M4 19h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
       <span id="savevidoUpdatePercent"></span>
     </button>
