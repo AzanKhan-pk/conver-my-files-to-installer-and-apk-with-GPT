@@ -158,7 +158,7 @@
     const data = event.detail || {};
     setProgress(100, 'Download complete · Ready to apply');
     message.textContent = 'Update downloaded and verified.';
-    details.textContent = 'The changed files are downloaded and verified. Close SaveVido fully from the tray menu to apply them, then open it again. SaveVido will not close or restart itself.';
+    details.textContent = 'The changed files are downloaded and verified. Close this window to exit SaveVido and apply the update. If SaveVido is minimized to the tray, choose Exit SaveVido from the tray menu. Then open SaveVido again. The app will not restart itself.';
   });
 
   window.addEventListener('savevido-update-installed', event => {
