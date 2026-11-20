@@ -2,7 +2,7 @@ const $=id=>document.getElementById(id);
 let token=sessionStorage.getItem("savevido_owner_token")||"";
 const api="/api/metrics";
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function time(s){return s?new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(s)):"—";}
+function time(s){return s?new Intl.DateTimeFormat("en-PK",{dateStyle:"medium",timeStyle:"short",timeZone:"Asia/Karachi"}).format(new Date(s)):"—";}
 function downloadFeedback(x){const blob=new Blob([JSON.stringify(x,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="savevido-feedback-"+x.id+".json";a.click();URL.revokeObjectURL(url);}
 async function copyFeedbackUrl(value){try{await navigator.clipboard.writeText(value);$("status").textContent="URL copied to clipboard.";}catch(_){$("status").textContent="Could not copy URL. Open it and copy manually.";}}
 async function deleteFeedback(id){if(!confirm("Delete this feedback permanently?"))return;const r=await fetch(api+"?feedback_id="+encodeURIComponent(id),{method:"DELETE",headers:{Authorization:"Bearer "+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Delete failed");load();}
@@ -36,7 +36,7 @@ async function load(){
     const actions='<button type="button" data-download-feedback="'+esc(x.id)+'">Download</button> <button type="button" data-delete-feedback="'+esc(x.id)+'">Delete</button>';
     const location=coords?link(mapUrl,"Open shared location")+'<br><small>'+esc(time(x.location_consent_at))+' · ±'+esc(Math.round(Number(x.location_accuracy_m)||0))+' m</small>':"Not shared";
     return '<tr><td>'+esc(time(x.created_at))+'</td><td>'+esc(x.nickname)+'</td><td>'+contactEmail+'</td><td>'+phone+'</td><td style="white-space:pre-wrap;min-width:240px">'+esc(x.message)+'</td><td>'+source+'<br>'+sourceCopy+'<br><small>'+esc(x.source_app||"")+'</small></td><td style="white-space:pre-wrap">'+esc(x.error_details||"—")+'</td><td>'+location+'</td><td>'+actions+'</td></tr>';
-  }).join("")||'<tr><td colspan="8">No feedback received yet</td></tr>';
+  }).join("")||'<tr><td colspan="9">No feedback received yet</td></tr>';
   $("status").textContent="Connected. Dashboard refreshes every 30 seconds.";
   $("feedbacks").querySelectorAll("[data-copy-url]").forEach(b=>b.addEventListener("click",()=>copyFeedbackUrl(b.dataset.copyUrl)));
   $("feedbacks").querySelectorAll("[data-download-feedback]").forEach(b=>b.addEventListener("click",()=>{const item=feedbacks.find(x=>x.id===b.dataset.downloadFeedback);if(item)downloadFeedback(item);}));
