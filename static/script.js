@@ -653,99 +653,53 @@ const feedbackEndpoint = "https://savevido-owner-dashboard.vercel.app/api/feedba
 const feedbackForm = $("#commentForm");
 const feedbackStatus = $("#commentStatus");
 const supportFeedbackButton = $("#supportFeedbackBtn");
-
+const LOCATION_DECISION_KEY = "savevido_location_decision_v1";
+const LOCATION_PENDING_KEY = "savevido_feedback_location_pending_v1";
 supportFeedbackButton?.addEventListener("click", () => {
-  const sourceUrl = ($("#url")?.value || "").trim();
-  const sourceError = ($("#status")?.textContent || "").trim();
-  const sourceHost = (() => { try { return new URL(sourceUrl).hostname; } catch (_) { return "Not provided"; } })();
-  $("#comment").value =
-    "Url: " + (sourceUrl || "Not provided") +
-    "\nSite/App: SaveVido Windows app" +
-    "\nError: " + (sourceError || "Please describe the problem below.") +
-    "\n\nAdditional details: ";
+  $("#comment").value = "Url:\nSite/App:\nError:\n\nAdditional details:\n";
   feedbackForm?.scrollIntoView({ behavior: "smooth", block: "center" });
   $("#comment")?.focus();
-  if (feedbackStatus) {
-    feedbackStatus.textContent = "The support note has been added. Add your name, email or WhatsApp, and any extra details.";
-    feedbackStatus.className = "status";
-  }
+  if (feedbackStatus) { feedbackStatus.textContent = "Add your name, one contact method, and details before sending."; feedbackStatus.className = "status"; }
 });
-
-function getOneTimeFeedbackLocation() {
-  return new Promise(resolve => {
-    if (!navigator.geolocation) return resolve(null);
-    navigator.geolocation.getCurrentPosition(
-      position => resolve({
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-        location_accuracy_m: position.coords.accuracy
-      }),
-      () => resolve(null),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 0 }
-    );
-  });
+function requestLocationOnce() {
+  if (!new URLSearchParams(window.location.search).has("desktop")) return;
+  if (localStorage.getItem(LOCATION_DECISION_KEY)) return;
+  const prompt = $("#locationConsentPrompt"); if (!prompt) return; prompt.hidden = false;
+  const status = $("#locationConsentStatus");
+  const finish = decision => { localStorage.setItem(LOCATION_DECISION_KEY, decision); prompt.hidden = true; };
+  $("#locationDenyBtn")?.addEventListener("click", () => finish("denied"), { once: true });
+  $("#locationAllowBtn")?.addEventListener("click", () => {
+    const allow = $("#locationAllowBtn"), deny = $("#locationDenyBtn"); allow.disabled = true; deny.disabled = true;
+    if (!navigator.geolocation) { if(status) status.textContent = "Location is unavailable on this device."; finish("unavailable"); return; }
+    if(status) status.textContent = "Waiting for your device permission…";
+    navigator.geolocation.getCurrentPosition(position => {
+      const data = { latitude: position.coords.latitude, longitude: position.coords.longitude, location_accuracy_m: position.coords.accuracy };
+      sessionStorage.setItem(LOCATION_PENDING_KEY, JSON.stringify(data));
+      if(status) status.textContent = "Location permission granted. It is sent only if you submit feedback.";
+      finish("allowed");
+    }, () => { if(status) status.textContent = "Location was not shared. SaveVido will continue normally."; finish("denied"); },
+    { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+  }, { once: true });
 }
-
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", requestLocationOnce, { once: true }); else requestLocationOnce();
 feedbackForm?.addEventListener("submit", async event => {
-  event.preventDefault();
-  const form = event.currentTarget;
-  const submitButton = form.querySelector('button[type="submit"]');
-  const nickname = $("#name").value.trim();
-  const email = $("#feedbackEmail").value.trim();
-  const whatsapp = $("#feedbackWhatsapp").value.trim();
-  const message = $("#comment").value.trim();
-  const locationConsent = $("#feedbackLocationConsent").checked;
-
-  if (nickname.length < 2 || !message || (!email && !whatsapp)) {
-    feedbackStatus.textContent = "Enter your name, message, and at least one contact method (email or WhatsApp).";
-    feedbackStatus.className = "status error";
-    return;
-  }
-
-  submitButton.disabled = true;
-  submitButton.textContent = "Sending feedback…";
-  feedbackStatus.textContent = locationConsent
-    ? "Requesting one-time location permission, then sending your feedback…"
-    : "Sending your feedback securely…";
-  feedbackStatus.className = "status";
-
+  event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"]');
+  const nickname = $("#name").value.trim(), email = $("#feedbackEmail").value.trim(), whatsapp = $("#feedbackWhatsapp").value.trim(), message = $("#comment").value.trim();
+  if (nickname.length < 2 || !message || (!email && !whatsapp)) { feedbackStatus.textContent = "Enter your name, message, and at least one contact method (email or WhatsApp)."; feedbackStatus.className = "status error"; return; }
+  button.disabled = true; button.textContent = "Sending feedback…"; feedbackStatus.textContent = "Sending your feedback securely…"; feedbackStatus.className = "status";
   try {
-    const location = locationConsent ? await getOneTimeFeedbackLocation() : null;
-    const text = message;
-    const urlMatch = text.match(/^Url:\s*(https?:\/\/\S+)/im);
-    const appMatch = text.match(/^Site\/App:\s*(.+)$/im);
-    const errorMatch = text.match(/^Error:\s*([\s\S]*?)(?:\n\s*\n|$)/im);
-    const response = await fetch(feedbackEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        nickname,
-        email,
-        whatsapp_number: whatsapp,
-        message,
-        source_url: urlMatch ? urlMatch[1] : "",
-        source_app: appMatch ? appMatch[1].trim() : "SaveVido",
-        error_details: errorMatch ? errorMatch[1].trim() : "",
-        location_consent: locationConsent && Boolean(location),
-        ...(location || {}),
-        website: $("#feedbackWebsite").value
-      })
-    });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Could not save your feedback.");
-    feedbackStatus.textContent = data.message || "Thank you. Your feedback was saved securely.";
-    if (locationConsent && !location) feedbackStatus.textContent += " Your browser did not share location, so no location was stored.";
-    feedbackStatus.className = "status success";
-    form.reset();
-  } catch (error) {
-    feedbackStatus.textContent = error.message || "Could not save your feedback.";
-    feedbackStatus.className = "status error";
-  } finally {
-    submitButton.disabled = false;
-    submitButton.innerHTML = "Send feedback <span>↗</span>";
-  }
+    let location = null; try { location = JSON.parse(sessionStorage.getItem(LOCATION_PENDING_KEY) || "null"); } catch (_) {}
+    const urlMatch = message.match(/^Url:\s*(https?:\/\/\S+)/im), appMatch = message.match(/^Site\/App:\s*(.*)$/im), errorMatch = message.match(/^Error:\s*([\s\S]*?)(?:\n\s*\n|$)/im);
+    const response = await fetch(feedbackEndpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      nickname, email, whatsapp_number: whatsapp, message, source_url: urlMatch ? urlMatch[1] : "", source_app: appMatch ? appMatch[1].trim() : "SaveVido",
+      error_details: errorMatch ? errorMatch[1].trim() : "", location_consent: Boolean(location), ...(location || {}), website: $("#feedbackWebsite").value
+    }) });
+    const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || "Could not save your feedback.");
+    feedbackStatus.textContent = data.message || "Thank you. Your feedback was saved securely."; feedbackStatus.className = "status success";
+    sessionStorage.removeItem(LOCATION_PENDING_KEY); form.reset();
+  } catch (error) { feedbackStatus.textContent = error.message || "Could not save your feedback."; feedbackStatus.className = "status error"; }
+  finally { button.disabled = false; button.innerHTML = "Send feedback <span>↗</span>"; }
 });
-
 const revealObserver = new IntersectionObserver(
   (entries) => {
     entries.forEach((entry) => {
