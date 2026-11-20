@@ -160,6 +160,9 @@ class UpdatePage(QWebEnginePage):
             elif url.host() == "download-full-installer":
                 if self.window.pending_installer_url:
                     QDesktopServices.openUrl(QUrl(self.window.pending_installer_url))
+            elif url.host() == "open-location-settings":
+                if sys.platform == "win32":
+                    QDesktopServices.openUrl(QUrl("ms-settings:privacy-location"))
             return False
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
