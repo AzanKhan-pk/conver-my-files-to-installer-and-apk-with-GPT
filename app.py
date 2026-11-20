@@ -1425,6 +1425,28 @@ def run_download_job(job_id):
             )
 
 
+@app.route("/api/location-consent", methods=["GET", "POST"])
+def location_consent():
+    """Persist the one-time location choice locally for this Windows installation."""
+    consent_file = APP_DATA_DIR / "location-consent.json"
+    if request.method == "GET":
+        try:
+            value = json.loads(consent_file.read_text(encoding="utf-8"))
+            decision = value.get("decision") if isinstance(value, dict) else None
+        except (OSError, ValueError, TypeError):
+            decision = None
+        return jsonify({"decision": decision if decision in ("allowed", "denied") else None})
+    payload = request.get_json(silent=True) or {}
+    decision = str(payload.get("decision") or "").strip().lower()
+    if decision not in ("allowed", "denied"):
+        return jsonify({"error": "Invalid location consent choice."}), 400
+    try:
+        consent_file.write_text(json.dumps({"decision": decision, "updated_at": now_iso()}), encoding="utf-8")
+    except OSError:
+        return jsonify({"error": "Could not save this setting on your device."}), 500
+    return jsonify({"ok": True, "decision": decision})
+
+
 @app.get("/share")
 def android_pwa_share_target():
     # Web Share Target support for Android-installed SaveVido PWA.
