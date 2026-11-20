@@ -1407,7 +1407,7 @@
 
 
 
-  <section id="locationConsentPrompt" role="dialog" aria-modal="true" aria-labelledby="locationConsentTitle" hidden><div class="location-consent-card"><p class="eyebrow">OPTIONAL · ONE TIME</p><h2 id="locationConsentTitle">Allow your location?</h2><p>Sharing your approximate current location can help troubleshoot a problem. It is optional and is attached only if you later submit feedback.</p><button id="locationAllowBtn" type="button" class="solid-btn">Allow</button> <button id="locationDenyBtn" type="button">Deny</button><p id="locationConsentStatus" role="status"></p></div></section>
+  <section id="locationConsentPrompt" role="dialog" aria-modal="true" aria-labelledby="locationConsentTitle" hidden><div class="location-consent-card"><p class="eyebrow">OPTIONAL · ONE TIME</p><h2 id="locationConsentTitle">Allow your location?</h2><p>Sharing your approximate current location can help troubleshoot a problem. It is optional and is attached only if you later submit feedback.</p><button id="locationAllowBtn" type="button" class="solid-btn">Allow</button> <button id="locationDenyBtn" type="button">Deny</button> <button id="locationTurnOnBtn" type="button" hidden>Turn on location</button><p id="locationConsentStatus" role="status"></p></div></section>
 
   <!-- MAIN JAVASCRIPT -->
 
@@ -1426,7 +1426,7 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261120-feedback-location-1"
+    src="{{ url_for('static', filename='script.js') }}?v=20261120-location-persistent-2"
   ></script>
   <script src="{{ url_for('static', filename='update.js') }}?v=1" defer></script>
 
