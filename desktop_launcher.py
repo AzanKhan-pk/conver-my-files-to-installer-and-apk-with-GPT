@@ -172,6 +172,8 @@ class SaveVidoWindow(QMainWindow):
         self.pending_version = None
         self.silent_check = False
         self.update_helper = None
+        self.update_started = False
+        self.update_ready_to_apply = False
         self.update_status_file = Path(savevido_app.APP_DATA_DIR) / "update-status.json"
         self.update_poll = QTimer(self)
         self.update_poll.setInterval(400)
@@ -221,6 +223,9 @@ class SaveVidoWindow(QMainWindow):
         self.silent_check = False
 
     def install_update(self):
+        if self.update_started:
+            self.dispatch("savevido-update-progress", {"status": "downloading", "percent": 0, "message": "Update is already running. Reopen the progress panel to see its status."})
+            return
         if not self.pending_manifest_urls:
             if self.pending_installer_url:
                 QDesktopServices.openUrl(QUrl(self.pending_installer_url))
@@ -247,6 +252,8 @@ class SaveVidoWindow(QMainWindow):
         try:
             self.dispatch("savevido-update-installing", {"version": self.pending_version})
             self.update_helper = subprocess.Popen(command, cwd=str(APP_ROOT), close_fds=True)
+            self.update_started = True
+            self.update_ready_to_apply = False
             self.update_poll.start()
         except Exception as exc:
             self.dispatch("savevido-update-result", {"status": "error", "message": f"Could not start the updater: {exc}"})
@@ -263,16 +270,20 @@ class SaveVidoWindow(QMainWindow):
         if state in ("downloading", "verifying"):
             self.dispatch("savevido-update-progress", data)
         elif state == "ready":
-            self.update_poll.stop()
-            self.dispatch("savevido-update-ready", data)
-            self.update_status_file.unlink(missing_ok=True)
-            # Keep SaveVido open; the updater waits until the user exits manually.
+            if not self.update_ready_to_apply:
+                self.update_ready_to_apply = True
+                self.dispatch("savevido-update-ready", data)
+            # Keep polling while the updater waits for the app to exit.
         elif state == "failed":
             self.update_poll.stop()
+            self.update_started = False
+            self.update_ready_to_apply = False
             self.dispatch("savevido-update-failed", data)
             self.update_status_file.unlink(missing_ok=True)
         elif state == "installed":
             self.update_poll.stop()
+            self.update_started = False
+            self.update_ready_to_apply = False
             self.dispatch("savevido-update-installed", data)
             self.update_status_file.unlink(missing_ok=True)
 
@@ -283,6 +294,10 @@ class SaveVidoWindow(QMainWindow):
         self.qt_app.quit()
 
     def closeEvent(self, event):
+        if self.update_ready_to_apply:
+            event.accept()
+            self.qt_app.quit()
+            return
         event.ignore()
         self.hide()
 
