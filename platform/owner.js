@@ -2,7 +2,10 @@ const $=id=>document.getElementById(id);
 let token=sessionStorage.getItem("savevido_owner_token")||"";
 const api="/api/metrics";
 function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function time(s){return s?new Date(s).toLocaleString():"—";}
+function time(s){return s?new Intl.DateTimeFormat(undefined,{dateStyle:"medium",timeStyle:"short"}).format(new Date(s)):"—";}
+function downloadFeedback(x){const blob=new Blob([JSON.stringify(x,null,2)],{type:"application/json"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download="savevido-feedback-"+x.id+".json";a.click();URL.revokeObjectURL(url);}
+async function copyFeedbackUrl(value){try{await navigator.clipboard.writeText(value);$("status").textContent="URL copied to clipboard.";}catch(_){$("status").textContent="Could not copy URL. Open it and copy manually.";}}
+async function deleteFeedback(id){if(!confirm("Delete this feedback permanently?"))return;const r=await fetch(api+"?feedback_id="+encodeURIComponent(id),{method:"DELETE",headers:{Authorization:"Bearer "+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Delete failed");load();}
 function link(url,label){return url?'<a class="map" target="_blank" rel="noopener noreferrer" href="'+esc(url)+'">'+esc(label)+'</a>':"—";}
 async function load(){
  $("status").textContent="Loading private analytics…";
@@ -29,10 +32,15 @@ async function load(){
     const contactEmail=x.email?'<a class="map" href="mailto:'+encodeURIComponent(x.email)+'">'+esc(x.email)+'</a>':"—";
     const phone=x.whatsapp_number?'<a class="map" target="_blank" rel="noopener noreferrer" href="https://wa.me/'+esc(x.whatsapp_number.replace(/[^0-9]/g,""))+'">'+esc(x.whatsapp_number)+'</a>':"—";
     const source=x.source_url?link(x.source_url,"Open source URL"):esc(x.source_app||"SaveVido");
+    const sourceCopy=x.source_url?'<button type="button" data-copy-url="'+esc(x.source_url)+'">Copy URL</button>':"";
+    const actions='<button type="button" data-download-feedback="'+esc(x.id)+'">Download</button> <button type="button" data-delete-feedback="'+esc(x.id)+'">Delete</button>';
     const location=coords?link(mapUrl,"Open shared location")+'<br><small>'+esc(time(x.location_consent_at))+' · ±'+esc(Math.round(Number(x.location_accuracy_m)||0))+' m</small>':"Not shared";
-    return '<tr><td>'+esc(time(x.created_at))+'</td><td>'+esc(x.nickname)+'</td><td>'+contactEmail+'</td><td>'+phone+'</td><td style="white-space:pre-wrap;min-width:240px">'+esc(x.message)+'</td><td>'+source+'<br><small>'+esc(x.source_app||"")+'</small></td><td style="white-space:pre-wrap">'+esc(x.error_details||"—")+'</td><td>'+location+'</td></tr>';
+    return '<tr><td>'+esc(time(x.created_at))+'</td><td>'+esc(x.nickname)+'</td><td>'+contactEmail+'</td><td>'+phone+'</td><td style="white-space:pre-wrap;min-width:240px">'+esc(x.message)+'</td><td>'+source+'<br>'+sourceCopy+'<br><small>'+esc(x.source_app||"")+'</small></td><td style="white-space:pre-wrap">'+esc(x.error_details||"—")+'</td><td>'+location+'</td><td>'+actions+'</td></tr>';
   }).join("")||'<tr><td colspan="8">No feedback received yet</td></tr>';
   $("status").textContent="Connected. Dashboard refreshes every 30 seconds.";
+  $("feedbacks").querySelectorAll("[data-copy-url]").forEach(b=>b.addEventListener("click",()=>copyFeedbackUrl(b.dataset.copyUrl)));
+  $("feedbacks").querySelectorAll("[data-download-feedback]").forEach(b=>b.addEventListener("click",()=>{const item=feedbacks.find(x=>x.id===b.dataset.downloadFeedback);if(item)downloadFeedback(item);}));
+  $("feedbacks").querySelectorAll("[data-delete-feedback]").forEach(b=>b.addEventListener("click",()=>deleteFeedback(b.dataset.deleteFeedback).catch(e=>alert(e.message))));
  }catch(e){
   $("status").textContent=e.message;
   if(String(e.message).includes("token")){sessionStorage.removeItem("savevido_owner_token");token="";$("dashboard").classList.add("hidden");$("login").classList.remove("hidden");}
