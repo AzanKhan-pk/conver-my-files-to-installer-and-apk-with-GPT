@@ -1225,12 +1225,8 @@
         <label for="comment">YOUR MESSAGE</label>
         <textarea id="comment" required minlength="3" maxlength="4000" rows="5" placeholder="Tell us what happened or suggest an improvement"></textarea>
 
-        <label class="feedback-location-choice">
-          <input id="feedbackLocationConsent" type="checkbox">
-          <span>Share my current location once with this feedback to help troubleshoot. Optional; your browser will ask permission.</span>
-        </label>
-        <input type="text" id="feedbackWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px">
-        <p class="feedback-privacy-note">Your name, message and one contact method are required. Location is sent only if you choose this option and grant browser permission.</p>
+<input type="text" id="feedbackWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px">
+        <p class="feedback-privacy-note">Your name, message and one contact method are required. On the first desktop-app launch only, SaveVido asks whether you want to share your location. It is optional and never collected in the background.</p>
 
         <button class="solid-btn" type="submit">Send feedback <span>↗</span></button>
         <div id="commentStatus" class="status" role="status" aria-live="polite"></div>
@@ -1409,6 +1405,9 @@
   </footer>
 
 
+
+
+  <section id="locationConsentPrompt" role="dialog" aria-modal="true" aria-labelledby="locationConsentTitle" hidden><div class="location-consent-card"><p class="eyebrow">OPTIONAL · ONE TIME</p><h2 id="locationConsentTitle">Allow your location?</h2><p>Sharing your approximate current location can help troubleshoot a problem. It is optional and is attached only if you later submit feedback.</p><button id="locationAllowBtn" type="button" class="solid-btn">Allow</button> <button id="locationDenyBtn" type="button">Deny</button><p id="locationConsentStatus" role="status"></p></div></section>
 
   <!-- MAIN JAVASCRIPT -->
 
