@@ -661,24 +661,64 @@ supportFeedbackButton?.addEventListener("click", () => {
   $("#comment")?.focus();
   if (feedbackStatus) { feedbackStatus.textContent = "Add your name, one contact method, and details before sending."; feedbackStatus.className = "status"; }
 });
-function requestLocationOnce() {
+async function requestLocationOnce() {
   if (!new URLSearchParams(window.location.search).has("desktop")) return;
-  if (localStorage.getItem(LOCATION_DECISION_KEY)) return;
-  const prompt = $("#locationConsentPrompt"); if (!prompt) return; prompt.hidden = false;
+  const prompt = $("#locationConsentPrompt");
+  if (!prompt) return;
   const status = $("#locationConsentStatus");
-  const finish = decision => { localStorage.setItem(LOCATION_DECISION_KEY, decision); prompt.hidden = true; };
-  $("#locationDenyBtn")?.addEventListener("click", () => finish("denied"), { once: true });
-  $("#locationAllowBtn")?.addEventListener("click", () => {
-    const allow = $("#locationAllowBtn"), deny = $("#locationDenyBtn"); allow.disabled = true; deny.disabled = true;
-    if (!navigator.geolocation) { if(status) status.textContent = "Location is unavailable on this device."; finish("unavailable"); return; }
-    if(status) status.textContent = "Waiting for your device permission…";
-    navigator.geolocation.getCurrentPosition(position => {
+  const allow = $("#locationAllowBtn");
+  const deny = $("#locationDenyBtn");
+  const turnOn = $("#locationTurnOnBtn");
+  try {
+    const saved = await fetch("/api/location-consent", { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject(new Error("Could not read saved location preference.")));
+    if (saved.decision === "allowed" || saved.decision === "denied") return;
+  } catch (error) {
+    if (status) status.textContent = "Could not check the saved permission choice. Please restart the app or try again.";
+    return;
+  }
+  prompt.hidden = false;
+  const saveDecision = async decision => {
+    const response = await fetch("/api/location-consent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) });
+    if (!response.ok) throw new Error("Could not save your choice on this device.");
+    prompt.hidden = true;
+  };
+  deny?.addEventListener("click", async () => {
+    deny.disabled = true;
+    try { await saveDecision("denied"); }
+    catch (error) { if (status) status.textContent = error.message; deny.disabled = false; }
+  }, { once: true });
+  turnOn?.addEventListener("click", () => {
+    window.location.href = "savevido://open-location-settings";
+  });
+  allow?.addEventListener("click", () => {
+    if (!navigator.geolocation) {
+      if (status) status.textContent = "Location is unavailable. Turn on Location Services in Windows Settings, then try again.";
+      if (turnOn) turnOn.hidden = false;
+      return;
+    }
+    allow.disabled = true;
+    deny.disabled = true;
+    if (status) status.textContent = "Checking whether device location is available…";
+    navigator.geolocation.getCurrentPosition(async position => {
       const data = { latitude: position.coords.latitude, longitude: position.coords.longitude, location_accuracy_m: position.coords.accuracy };
       sessionStorage.setItem(LOCATION_PENDING_KEY, JSON.stringify(data));
-      if(status) status.textContent = "Location permission granted. It is sent only if you submit feedback.";
-      finish("allowed");
-    }, () => { if(status) status.textContent = "Location was not shared. SaveVido will continue normally."; finish("denied"); },
-    { enableHighAccuracy: false, timeout: 5000, maximumAge: 60000 });
+      try {
+        await saveDecision("allowed");
+        if (status) status.textContent = "Location permission saved. It will only be included if you submit feedback.";
+      } catch (error) {
+        sessionStorage.removeItem(LOCATION_PENDING_KEY);
+        if (status) status.textContent = error.message;
+        allow.disabled = false;
+        deny.disabled = false;
+      }
+    }, error => {
+      allow.disabled = false;
+      deny.disabled = false;
+      if (status) status.textContent = error.code === 1
+        ? "Windows or this device is blocking location access. Turn on Location Services and allow location access, then press Allow again."
+        : "Device location is turned off or unavailable. Turn on Location Services, then press Allow again.";
+      if (turnOn) turnOn.hidden = false;
+    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
   }, { once: true });
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", requestLocationOnce, { once: true }); else requestLocationOnce();
