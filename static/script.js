@@ -719,7 +719,7 @@ async function requestLocationOnce() {
         : "Device location is turned off or unavailable. Turn on Location Services, then press Allow again.";
       if (turnOn) turnOn.hidden = false;
     }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
-  }, { once: true });
+  });
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", requestLocationOnce, { once: true }); else requestLocationOnce();
 feedbackForm?.addEventListener("submit", async event => {
