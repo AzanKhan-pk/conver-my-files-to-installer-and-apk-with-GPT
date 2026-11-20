@@ -13,7 +13,7 @@ from PySide6.QtCore import QObject, QTimer, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtGui import QAction, QIcon
 from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QMessageBox, QSystemTrayIcon
-from PySide6.QtWebEngineCore import QWebEnginePage
+from PySide6.QtWebEngineCore import QWebEnginePage, QWebEnginePermission
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from werkzeug.serving import make_server
 import requests
@@ -184,12 +184,29 @@ class SaveVidoWindow(QMainWindow):
         if ICON_PATH.is_file():
             self.setWindowIcon(QIcon(str(ICON_PATH)))
         self.browser = QWebEngineView(self)
-        self.browser.setPage(UpdatePage(self, self.browser))
+        page = UpdatePage(self, self.browser)
+        try:
+            page.permissionRequested.connect(self.on_permission_requested)
+        except Exception:
+            pass
+        self.browser.setPage(page)
         self.browser.setUrl(QUrl(f"{APP_URL}/?desktop=1"))
         self.setCentralWidget(self.browser)
         self.checker.finished.connect(self.on_update_result)
         QTimer.singleShot(2500, self.show_update_status)
 
+    def on_permission_requested(self, permission):
+        # Geolocation is requested only after the user chooses Allow in the app dialog.
+        try:
+            if permission.permissionType() == QWebEnginePermission.PermissionType.Geolocation:
+                permission.grant()
+            else:
+                permission.deny()
+        except Exception:
+            try:
+                permission.deny()
+            except Exception:
+                pass
     def show_update_status(self):
         status_file = Path(savevido_app.APP_DATA_DIR) / "update-status.json"
         try:
