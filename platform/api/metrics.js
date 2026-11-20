@@ -8,10 +8,11 @@ function authorized(req){
  return a.length===b.length&&timingSafeEqual(a,b);
 }
 module.exports=async function handler(req,res){
- if(req.method!=="GET")return send(res,405,{error:"Method not allowed"});
+ if(!["GET","DELETE"].includes(req.method))return send(res,405,{error:"Method not allowed"});
  if(!authorized(req))return send(res,401,{error:"Unauthorized"});
  try{
   const sql=getSql();
+  if(req.method==="DELETE"){const id=String(req.query?.feedback_id||"").trim();if(!/^[0-9a-fA-F-]{36}$/.test(id))return send(res,400,{error:"A valid feedback ID is required"});const deleted=await sql`DELETE FROM savevido_feedbacks WHERE id=${id} RETURNING id`;if(!deleted.length)return send(res,404,{error:"Feedback not found"});return send(res,200,{ok:true,deleted_id:id});}
   const [totals,daily,countries,platforms,recentErrors,recentEvents,feedbacks]=await Promise.all([
    sql`SELECT (SELECT COUNT(*)::int FROM platform_events WHERE event_type IN ('download_succeeded','download_served')) AS downloads,(SELECT COUNT(*)::int FROM platform_events WHERE event_type='page_view') AS page_views,(SELECT COUNT(*)::int FROM platform_sessions) AS visitors,(SELECT COUNT(*)::int FROM platform_sessions WHERE last_seen_at>NOW()-INTERVAL '5 minutes') AS active_sessions,(SELECT COUNT(*)::int FROM platform_events WHERE event_type='download_failed') AS failed_downloads`,
    sql`SELECT day::date::text AS date,COUNT(e.id) FILTER(WHERE e.event_type='page_view')::int AS page_views,COUNT(e.id) FILTER(WHERE e.event_type IN ('download_succeeded','download_served'))::int AS downloads FROM generate_series(CURRENT_DATE-INTERVAL '13 days',CURRENT_DATE,INTERVAL '1 day') day LEFT JOIN platform_events e ON e.created_at>=day AND e.created_at<day+INTERVAL '1 day' GROUP BY day ORDER BY day`,
