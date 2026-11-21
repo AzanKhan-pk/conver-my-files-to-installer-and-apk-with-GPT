@@ -9,10 +9,17 @@ import json
 import tempfile
 import threading
 import uuid
+import ipaddress
+import socket
 from datetime import datetime, timezone
 from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
+
+try:
+    from yt_dlp.extractor import gen_extractor_classes
+except ImportError:
+    gen_extractor_classes = None
 
 import yt_dlp
 import requests
@@ -126,69 +133,6 @@ ALLOWED_HOSTS = {
     "i.pinimg.com", "images.pinimg.com",
     "v.pinimg.com",
 
-    # Darkero
-    "darkero.co", "www.darkero.co",
-    "darkero.com", "www.darkero.com",
-    "files.darkero.com",
-
-    # Baddielatina
-    "baddielatina.com",
-    "www.baddielatina.com",
-    "files.baddielatina.com",
-
-    # Pornhub
-    "pornhub.com", "www.pornhub.com",
-    "m.pornhub.com",
-    "pornhub.org",
-    "pornhubpremium.com",
-    "phncdn.com",
-    "www.phncdn.com",
-    "ci.phncdn.com",
-    "ei.phncdn.com",
-    "di.phncdn.com",
-    "thumbs.phncdn.com",
-
-    # XNXX
-    "xnxx.com", "www.xnxx.com",
-    "m.xnxx.com",
-    "xnxx.tv",
-    "xnxx.health",
-    "xnxx-cdn.com",
-
-    # Xvideos
-    "xvideos.com", "www.xvideos.com",
-    "xvideos.red",
-    "xvideos-cdn.com",
-
-    # Xhamster
-    "xhamster.com", "www.xhamster.com",
-    "xhamster.desi",
-    "xhcdn.com",
-
-    # XVideos-style media hosting
-    "xv-cdn.com",
-
-    # Stripchat
-    "stripchat.com", "www.stripchat.com",
-    "static.stripchat.com",
-
-    # RedTube
-    "redtube.com", "www.redtube.com",
-
-    # YouPorn
-    "youporn.com", "www.youporn.com",
-
-    # SpankBang
-    "spankbang.com", "www.spankbang.com",
-
-    # Eporner
-    "eporner.com", "www.eporner.com",
-
-    # Tube8
-    "tube8.com", "www.tube8.com",
-
-    # TNAFlix
-    "tnaflix.com", "www.tnaflix.com",
 
     # Image hosting
     "imgur.com", "i.imgur.com",
@@ -206,6 +150,79 @@ ALLOWED_HOSTS = {
     "images.unsplash.com",
 }
 
+
+
+
+
+# Dynamic yt-dlp extractor discovery.
+# Uses installed yt-dlp extractors instead of a manually maintained list.
+
+def find_enabled_ytdlp_extractor(url):
+    if gen_extractor_classes is None:
+        raise RuntimeError("yt-dlp extractor catalogue is unavailable.")
+
+    for extractor_class in gen_extractor_classes():
+        ie_name = str(
+            getattr(extractor_class, "IE_NAME", "") or ""
+        )
+
+        # Avoid GenericIE because it can match arbitrary URLs.
+        if ie_name.lower() == "generic":
+            continue
+
+        try:
+            if extractor_class.suitable(url):
+                return ie_name
+        except Exception:
+            continue
+
+    return None
+
+def validate_public_host(host):
+    """Reject localhost, private, loopback, link-local and non-public IP targets."""
+    host = (host or "").strip().lower().rstrip(".")
+    if not host or host in {"localhost", "localhost.localdomain"}:
+        raise ValueError("Please enter a public website URL.")
+
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+
+    if ip is not None:
+        if not ip.is_global:
+            raise ValueError("Private or local network addresses are not allowed.")
+        return
+
+    try:
+        records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+    except socket.gaierror:
+        # DNS may be temporarily unavailable; yt-dlp will report the network error.
+        return
+
+    for record in records:
+        address = record[4][0].split("%", 1)[0]
+        try:
+            resolved_ip = ipaddress.ip_address(address)
+        except ValueError:
+            continue
+        if not resolved_ip.is_global:
+            raise ValueError("This website resolves to a private or local network address.")
+
+def find_enabled_ytdlp_extractor(url):
+    """Return an enabled mainstream yt-dlp extractor match, or None."""
+    if gen_extractor_classes is None:
+        raise RuntimeError("yt-dlp extractor catalogue is unavailable.")
+    for extractor_class in gen_extractor_classes():
+        ie_name = str(getattr(extractor_class, "IE_NAME", "") or "")
+        if ie_name not in SAFE_YTDLP_EXTRACTORS:
+            continue
+        try:
+            if extractor_class.suitable(url):
+                return ie_name
+        except Exception:
+            continue
+    return None
 
 
 DOWNLOAD_JOBS = {}
@@ -392,6 +409,7 @@ def send_notification(subject, body):
 
 
 
+
 def clean_url(value):
     value = (value or "").strip()
 
@@ -405,20 +423,26 @@ def clean_url(value):
     host = (parsed.hostname or "").lower().rstrip(".")
 
     if parsed.scheme.lower() not in {"http", "https"}:
-        raise ValueError(
-            "Please enter a valid HTTP or HTTPS URL."
-        )
+        raise ValueError("Only HTTP and HTTPS URLs are supported.")
 
     if not host or not parsed.netloc:
-        raise ValueError("Please enter a valid video URL.")
+        raise ValueError("Please enter a valid media URL.")
 
     if parsed.username is not None or parsed.password is not None:
-        raise ValueError("Invalid video URL.")
+        raise ValueError("URLs containing credentials are not allowed.")
 
-    if host in {"localhost", "localhost.localdomain"}:
-        raise ValueError("Please enter a public website URL.")
+    validate_public_host(host)
+
+    extractor = find_enabled_ytdlp_extractor(value)
+
+    if not extractor:
+        raise ValueError(
+            "No supported yt-dlp extractor was found for this URL."
+        )
 
     return value
+
+
 
 
 
@@ -426,72 +450,18 @@ def platform_for(url):
     host = (urlparse(url).hostname or "").lower()
     host = host.removeprefix("www.")
 
-    if host in {
-        "youtube.com",
-        "m.youtube.com",
-        "youtube-nocookie.com",
-        "youtu.be",
-    }:
-        return "YouTube"
+    if not host:
+        return "Unknown"
 
-    if host in {
-        "tiktok.com",
-        "vm.tiktok.com",
-        "vt.tiktok.com",
-    }:
-        return "TikTok"
+    try:
+        extractor = find_enabled_ytdlp_extractor(url)
+        if extractor:
+            return extractor.replace("_", " ").title()
+    except Exception:
+        pass
 
-    if host == "instagram.com":
-        return "Instagram"
+    return host
 
-    if host in {
-        "facebook.com",
-        "m.facebook.com",
-        "fb.com",
-        "fb.watch",
-    }:
-        return "Facebook"
-
-    if host in {"twitter.com", "x.com"}:
-        return "X / Twitter"
-
-    if host in {
-        "reddit.com",
-        "old.reddit.com",
-        "new.reddit.com",
-        "v.redd.it",
-        "redd.it",
-    }:
-        return "Reddit"
-
-    if host in {"vimeo.com", "player.vimeo.com"}:
-        return "Vimeo"
-
-    if host in {"dailymotion.com", "dai.ly"}:
-        return "Dailymotion"
-
-    if host in {
-        "twitch.tv",
-        "clips.twitch.tv",
-        "m.twitch.tv",
-    }:
-        return "Twitch"
-
-    if host in {"soundcloud.com", "snd.sc"}:
-        return "SoundCloud"
-
-    if host in {"bilibili.com", "b23.tv"}:
-        return "Bilibili"
-
-    if host in {
-        "pinterest.com",
-        "pin.it",
-        "i.pinimg.com",
-        "images.pinimg.com",
-    }:
-        return "Pinterest"
-
-    return host or "Unknown"
 
 
 
@@ -1442,16 +1412,7 @@ def api_info():
         }), 400
 
     except Exception as error:
-        app.logger.warning(
-            "Media info error: %s", error
-        )
-        return jsonify({
-            "ok": False,
-            "error": humanize_error(error),
-        }), 400
-
-    except Exception as error:
-        app.logger.warning("Info error: %s", error)
+        app.logger.warning("Media info error: %s", error)
         return jsonify({
             "ok": False,
             "error": humanize_error(error),
