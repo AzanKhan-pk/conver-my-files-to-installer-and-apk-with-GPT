@@ -46,10 +46,12 @@ DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
-app = Flask(__name__)
-app.config["SECRET_KEY"] = os.getenv(
-    "SECRET_KEY", "change-this-secret-key"
-)
+app.config["SECRET_KEY"] = os.getenv("SECRET_KEY")
+
+if not app.config["SECRET_KEY"]:
+    raise RuntimeError(
+        "SECRET_KEY environment variable is required."
+    )
 
 MIN_VALID_FILE_BYTES = 1024
 
@@ -157,7 +159,9 @@ ALLOWED_HOSTS = {
 # Dynamic yt-dlp extractor discovery.
 # Uses installed yt-dlp extractors instead of a manually maintained list.
 
+
 def find_enabled_ytdlp_extractor(url):
+    """Discover any supported yt-dlp extractor."""
     if gen_extractor_classes is None:
         raise RuntimeError("yt-dlp extractor catalogue is unavailable.")
 
@@ -166,8 +170,7 @@ def find_enabled_ytdlp_extractor(url):
             getattr(extractor_class, "IE_NAME", "") or ""
         )
 
-        # Avoid GenericIE because it can match arbitrary URLs.
-        if ie_name.lower() == "generic":
+        if ie_name.lower() in {"generic", "default"}:
             continue
 
         try:
@@ -177,6 +180,7 @@ def find_enabled_ytdlp_extractor(url):
             continue
 
     return None
+
 
 def validate_public_host(host):
     """Reject localhost, private, loopback, link-local and non-public IP targets."""
@@ -196,9 +200,10 @@ def validate_public_host(host):
 
     try:
         records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
-    except socket.gaierror:
-        # DNS may be temporarily unavailable; yt-dlp will report the network error.
-        return
+    except socket.gaierror as error:
+    raise ValueError(
+        "Website address could not be verified. Please try again."
+    ) from error
 
     for record in records:
         address = record[4][0].split("%", 1)[0]
@@ -208,21 +213,6 @@ def validate_public_host(host):
             continue
         if not resolved_ip.is_global:
             raise ValueError("This website resolves to a private or local network address.")
-
-def find_enabled_ytdlp_extractor(url):
-    """Return an enabled mainstream yt-dlp extractor match, or None."""
-    if gen_extractor_classes is None:
-        raise RuntimeError("yt-dlp extractor catalogue is unavailable.")
-    for extractor_class in gen_extractor_classes():
-        ie_name = str(getattr(extractor_class, "IE_NAME", "") or "")
-        if ie_name not in SAFE_YTDLP_EXTRACTORS:
-            continue
-        try:
-            if extractor_class.suitable(url):
-                return ie_name
-        except Exception:
-            continue
-    return None
 
 
 DOWNLOAD_JOBS = {}
@@ -410,6 +400,7 @@ def send_notification(subject, body):
 
 
 
+
 def clean_url(value):
     value = (value or "").strip()
 
@@ -431,13 +422,16 @@ def clean_url(value):
     if parsed.username is not None or parsed.password is not None:
         raise ValueError("URLs containing credentials are not allowed.")
 
+    if parsed.port not in (None, 80, 443):
+        raise ValueError("Custom URL ports are not allowed.")
+
     validate_public_host(host)
 
     extractor = find_enabled_ytdlp_extractor(value)
 
     if not extractor:
         raise ValueError(
-            "No supported yt-dlp extractor was found for this URL."
+            "This URL is not supported by the installed yt-dlp version."
         )
 
     return value
@@ -2016,11 +2010,19 @@ def api_comments():
     })
 
 
+
 @app.route("/admin")
 def admin():
-    if request.args.get("key") != os.getenv(
-        "ADMIN_KEY", "change-admin-key"
-    ):
+    admin_key = os.getenv("ADMIN_KEY")
+
+    if not admin_key:
+        return "Admin access is not configured.", 503
+
+    supplied_key = request.args.get("key", "")
+
+    import hmac
+
+    if not hmac.compare_digest(supplied_key, admin_key):
         return "Admin access denied.", 403
 
     with get_db() as connection:
