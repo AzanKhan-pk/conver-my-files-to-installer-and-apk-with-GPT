@@ -124,18 +124,23 @@ def main() -> int:
     backups: dict[Path, Path | None] = {}
     version = ""
 
-    def write_status(status: str, message: str = "", percent: int = 0) -> None:
+    def write_status(status: str, message: str = "", percent: int = 0) -> bool:
         if not args.status_file:
-            return
-        try:
-            status_path = Path(args.status_file)
-            status_path.parent.mkdir(parents=True, exist_ok=True)
-            status_path.write_text(json.dumps({
-                "status": status, "message": message, "version": version,
-                "percent": max(0, min(100, int(percent)))
-            }), encoding="utf-8")
-        except Exception:
-            pass
+            return False
+        status_path = Path(args.status_file)
+        status_path.parent.mkdir(parents=True, exist_ok=True)
+        payload = json.dumps({
+            "status": status, "message": message, "version": version,
+            "percent": max(0, min(100, int(percent)))
+        })
+        # Publish complete JSON atomically so the UI never reads a half-written file.
+        temp_status = status_path.with_name(status_path.name + ".tmp")
+        with temp_status.open("w", encoding="utf-8", newline="\\n") as handle:
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temp_status, status_path)
+        return True
 
     try:
         expected_base = str(args.base_version)
@@ -157,6 +162,16 @@ def main() -> int:
         if not manifest_chain:
             raise ValueError("No update manifests were provided.")
         version = str(manifest_chain[-1]["version"])
+        final_files = {}
+        for entry in manifest_chain[-1].get("files") or []:
+            name = str(entry.get("path") or "")
+            digest = str(entry.get("sha256") or "").lower()
+            safe_target(root, name)
+            if len(digest) != 64 or any(ch not in "0123456789abcdef" for ch in digest):
+                raise ValueError(f"Release manifest contains an invalid file hash: {name}")
+            final_files[name] = digest
+        if not final_files or "build_info.json" not in final_files:
+            raise ValueError("The latest release manifest is missing its verified file list or build_info.json.")
 
         for patch_index, manifest in enumerate(manifest_chain):
             patch = temp / f"patch-{patch_index}.zip"
@@ -212,6 +227,8 @@ def main() -> int:
         # after SaveVido has closed. Retry the actual atomic replacements below.
 
         all_targets = {safe_target(root, name) for name in staged} | {safe_target(root, name) for name in deleted}
+        # build_info.json is part of the release payload and must be rolled back too.
+        all_targets.add(safe_target(root, "build_info.json"))
         for target in all_targets:
             if target.exists() and target.is_file():
                 backup = backup_root / target.relative_to(root)
@@ -229,19 +246,34 @@ def main() -> int:
                 target = safe_target(root, name)
                 if target.is_file():
                     delete_with_retry(target)
-            version_file = stage_root / "build_info.json"
-            version_file.write_text(json.dumps({"version": version}, indent=2), encoding="utf-8")
-            replace_with_retry(version_file, root / "build_info.json")
+            # Verify every file listed by the final release manifest before reporting success.
+            for name, expected_hash in final_files.items():
+                target = safe_target(root, name)
+                if not target.is_file():
+                    raise RuntimeError(f"Update verification failed: {name} is missing.")
+                digest = hashlib.sha256(target.read_bytes()).hexdigest()
+                if digest != expected_hash:
+                    raise RuntimeError(f"Update verification failed: {name} does not match the release.")
+            installed_info = json.loads((root / "build_info.json").read_text(encoding="utf-8-sig"))
+            if str(installed_info.get("version") or "") != version:
+                raise RuntimeError("Update verification failed: installed version does not match the release.")
         except Exception:
+            # Restore the exact pre-update files, including build_info.json.
+            rollback_errors = []
             for target, backup in backups.items():
-                if backup and backup.exists():
-                    target.parent.mkdir(parents=True, exist_ok=True)
-                    shutil.copy2(backup, target)
-                elif target.exists() and target.is_file():
-                    target.unlink()
+                try:
+                    if backup and backup.exists():
+                        replace_with_retry(backup, target)
+                    elif target.exists() and target.is_file():
+                        delete_with_retry(target)
+                except Exception as rollback_error:
+                    rollback_errors.append(f"{target.name}: {rollback_error}")
+            if rollback_errors:
+                raise RuntimeError("Update failed and rollback needs attention: " + "; ".join(rollback_errors))
             raise
 
-        write_status("installed", "Update completed successfully. Open SaveVido again to use the new version.", 100)
+        if not write_status("installed", "Update completed and all installed files were verified. Open SaveVido again to use the new version.", 100):
+            raise RuntimeError("Update was applied, but the success status could not be saved.")
         if sys.platform == "win32":
             import ctypes
             ctypes.windll.user32.MessageBoxW(0, "SaveVido update completed successfully. You can open SaveVido now.", "SaveVido Updater", 0x40)
