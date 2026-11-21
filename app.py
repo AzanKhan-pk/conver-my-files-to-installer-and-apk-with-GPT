@@ -223,19 +223,6 @@ ALLOWED_HOSTS = {
 }
 
 
-# yt-dlp source hosts enabled by SaveVido.
-# Keep this list limited to mainstream/general-purpose platforms; yt-dlp's
-# full extractor catalogue also contains adult-content and other unsuitable sources.
-SAFE_YTDLP_SOURCE_HOSTS = {
-    "tiktok.com", "instagram.com", "facebook.com", "fb.watch",
-    "twitter.com", "x.com", "reddit.com", "redd.it", "v.redd.it",
-    "vimeo.com", "dailymotion.com", "dai.ly", "twitch.tv",
-    "soundcloud.com", "snd.sc", "bilibili.com", "b23.tv",
-    "pinterest.com", "pin.it", "archive.org", "bandcamp.com",
-    "mixcloud.com", "streamable.com", "rumble.com",
-}
-
-
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
 JOB_LAST_PERSISTED = {}
@@ -446,9 +433,11 @@ def clean_url(value):
 
     # Exact domain-boundary matching prevents lookalike hosts such as
     # youtube.com.example.org from being treated as YouTube.
+    # yt-dlp selects the matching extractor automatically. SaveVido still
+    # limits accepted source hosts to its maintained general-purpose host list.
     safe_host = any(
         host == domain or host.endswith("." + domain)
-        for domain in SAFE_YTDLP_SOURCE_HOSTS
+        for domain in ALLOWED_HOSTS
     )
     if not safe_host:
         raise ValueError(
