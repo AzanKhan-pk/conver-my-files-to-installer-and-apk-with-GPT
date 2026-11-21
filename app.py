@@ -435,15 +435,15 @@ def clean_url(value):
 
     validate_public_host(host)
 
-    extractor = find_enabled_ytdlp_extractor(value)
+extractor = find_enabled_ytdlp_extractor(value)
 
-    if not extractor:
-        raise ValueError(
-            "This URL is not supported by the installed yt-dlp version."
-        )
+if not extractor:
+    raise ValueError(
+        "This URL is not supported by the installed yt-dlp version. "
+        "Try updating yt-dlp."
+    )
 
-    return value
-
+return value
 
 
 
