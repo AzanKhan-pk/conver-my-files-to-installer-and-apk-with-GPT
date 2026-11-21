@@ -665,60 +665,140 @@ async function requestLocationOnce() {
   if (!new URLSearchParams(window.location.search).has("desktop")) return;
   const prompt = $("#locationConsentPrompt");
   if (!prompt) return;
+
   const status = $("#locationConsentStatus");
   const allow = $("#locationAllowBtn");
   const deny = $("#locationDenyBtn");
   const turnOn = $("#locationTurnOnBtn");
+  const title = $("#locationConsentTitle");
+  const eyebrow = prompt.querySelector(".eyebrow");
+  const description = title?.nextElementSibling;
+  let savedDecision = null;
+  let checkingLocation = false;
+
+  const showConsent = () => {
+    if (eyebrow) eyebrow.textContent = "OPTIONAL · YOUR CHOICE";
+    if (title) title.textContent = "Allow your location?";
+    if (description) description.textContent = "Sharing your approximate current location is optional and can help troubleshoot a problem. It is attached only if you later submit feedback.";
+    if (allow) allow.hidden = false;
+    if (deny) deny.hidden = false;
+    if (turnOn) turnOn.hidden = true;
+    if (status) status.textContent = "";
+    prompt.hidden = false;
+  };
+
+  const showLocationOff = () => {
+    if (eyebrow) eyebrow.textContent = "LOCATION IS OFF";
+    if (title) title.textContent = "Please turn on your location";
+    if (description) description.textContent = "You allowed location access, but device Location Services are currently off or blocked. Turn them on to continue. This message will remain until location is available.";
+    if (allow) allow.hidden = true;
+    if (deny) deny.hidden = true;
+    if (turnOn) {
+      turnOn.hidden = false;
+      turnOn.textContent = "Turn on location";
+    }
+    if (status) status.textContent = "";
+    prompt.hidden = false;
+  };
+
+  const saveDecision = async decision => {
+    const response = await fetch("/api/location-consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision })
+    });
+    if (!response.ok) throw new Error("Could not save your choice on this device.");
+  };
+
+  const checkDeviceLocation = async () => {
+    if (checkingLocation) return;
+    checkingLocation = true;
+    try {
+      if (!navigator.geolocation) throw new Error("unavailable");
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 60000
+        });
+      });
+      const data = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        location_accuracy_m: position.coords.accuracy
+      };
+      sessionStorage.setItem(LOCATION_PENDING_KEY, JSON.stringify(data));
+      prompt.hidden = true;
+      return true;
+    } catch (error) {
+      sessionStorage.removeItem(LOCATION_PENDING_KEY);
+      showLocationOff();
+      return false;
+    } finally {
+      checkingLocation = false;
+    }
+  };
+
   try {
-    const saved = await fetch("/api/location-consent", { cache: "no-store" }).then(r => r.ok ? r.json() : Promise.reject(new Error("Could not read saved location preference.")));
-    if (saved.decision === "allowed" || saved.decision === "denied") return;
+    const saved = await fetch("/api/location-consent", { cache: "no-store" })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error("Could not read saved location preference.")));
+    savedDecision = saved.decision;
   } catch (error) {
     if (status) status.textContent = "Could not check the saved permission choice. Please restart the app or try again.";
+    prompt.hidden = false;
     return;
   }
-  prompt.hidden = false;
-  const saveDecision = async decision => {
-    const response = await fetch("/api/location-consent", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision }) });
-    if (!response.ok) throw new Error("Could not save your choice on this device.");
-    prompt.hidden = true;
-  };
+
+  if (savedDecision === "allowed") {
+    await checkDeviceLocation();
+    // Re-check after returning from Windows Location Settings or restoring the app.
+    window.addEventListener("focus", () => checkDeviceLocation());
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkDeviceLocation();
+    });
+    turnOn?.addEventListener("click", () => {
+      window.location.href = "savevido://open-location-settings";
+    });
+    return;
+  }
+
+  // A previous Deny is intentionally not treated as permanent: ask again on every launch.
+  showConsent();
+
   deny?.addEventListener("click", async () => {
     deny.disabled = true;
-    try { await saveDecision("denied"); }
-    catch (error) { if (status) status.textContent = error.message; deny.disabled = false; }
-  }, { once: true });
-  turnOn?.addEventListener("click", () => {
-    window.location.href = "savevido://open-location-settings";
-  });
-  allow?.addEventListener("click", () => {
-    if (!navigator.geolocation) {
-      if (status) status.textContent = "Location is unavailable. Turn on Location Services in Windows Settings, then try again.";
-      if (turnOn) turnOn.hidden = false;
-      return;
+    try {
+      await saveDecision("denied");
+      prompt.hidden = true;
+    } catch (error) {
+      if (status) status.textContent = error.message;
+    } finally {
+      deny.disabled = false;
     }
+  });
+
+  allow?.addEventListener("click", async () => {
     allow.disabled = true;
     deny.disabled = true;
-    if (status) status.textContent = "Checking whether device location is available…";
-    navigator.geolocation.getCurrentPosition(async position => {
-      const data = { latitude: position.coords.latitude, longitude: position.coords.longitude, location_accuracy_m: position.coords.accuracy };
-      sessionStorage.setItem(LOCATION_PENDING_KEY, JSON.stringify(data));
-      try {
-        await saveDecision("allowed");
-        if (status) status.textContent = "Location permission saved. It will only be included if you submit feedback.";
-      } catch (error) {
-        sessionStorage.removeItem(LOCATION_PENDING_KEY);
-        if (status) status.textContent = error.message;
-        allow.disabled = false;
-        deny.disabled = false;
-      }
-    }, error => {
+    if (status) status.textContent = "Saving your permission and checking device location…";
+    try {
+      // Persist the user's Allow choice even if Windows Location Services are off.
+      // This lets future launches show the persistent 'turn on location' notice.
+      await saveDecision("allowed");
+      savedDecision = "allowed";
+      await checkDeviceLocation();
+      window.addEventListener("focus", () => checkDeviceLocation());
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) checkDeviceLocation();
+      });
+      turnOn?.addEventListener("click", () => {
+        window.location.href = "savevido://open-location-settings";
+      });
+    } catch (error) {
+      if (status) status.textContent = error.message;
       allow.disabled = false;
       deny.disabled = false;
-      if (status) status.textContent = error.code === 1
-        ? "Windows or this device is blocking location access. Turn on Location Services and allow location access, then press Allow again."
-        : "Device location is turned off or unavailable. Turn on Location Services, then press Allow again.";
-      if (turnOn) turnOn.hidden = false;
-    }, { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 });
+    }
   });
 }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", requestLocationOnce, { once: true }); else requestLocationOnce();
