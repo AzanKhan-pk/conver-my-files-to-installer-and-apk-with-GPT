@@ -198,12 +198,14 @@ def validate_public_host(host):
             raise ValueError("Private or local network addresses are not allowed.")
         return
 
-    try:
-        records = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        try:
+        records = socket.getaddrinfo(
+            host, None, type=socket.SOCK_STREAM
+        )
     except socket.gaierror as error:
-    raise ValueError(
-        "Website address could not be verified. Please try again."
-    ) from error
+        raise ValueError(
+            "Website address could not be verified. Please try again."
+        ) from error
 
     for record in records:
         address = record[4][0].split("%", 1)[0]
