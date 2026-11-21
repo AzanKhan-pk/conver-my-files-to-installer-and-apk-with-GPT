@@ -155,7 +155,7 @@ select option{background:var(--surface);color:var(--ink)}
   font-size: 15px;
 }
 
-#downloadProgressPercent {
+[data-role="percent"] {
   font-size: 14px;
   font-weight: 700;
 }
@@ -214,14 +214,25 @@ select option{background:var(--surface);color:var(--ink)}
 }
 
 .download-progress-actions button {
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink);
   padding: 10px 16px;
   cursor: pointer;
   font: inherit;
+  font-weight: 600;
 }
-
+.download-progress-actions button[data-action="pause"],
+.download-progress-actions button[data-action="resume"] {
+  border-color: var(--lime);
+  color: var(--lime);
+}
+.download-progress-actions button[data-action="cancel"] {
+  border-color: var(--danger);
+  color: var(--danger);
+}
 .download-progress-actions button:hover {
+  background: rgba(255, 255, 255, 0.10);
   border-color: currentColor;
 }
 
@@ -643,7 +654,7 @@ select option{background:var(--surface);color:var(--ink)}
 .notification-enable-button:hover { border-color: var(--line-bright); color: var(--ink); }
 .download-activity-list { display: grid; gap: 12px; margin-top: 14px; }
 .download-activity-list:empty { display: none; }
-#downloadProgressPanel {
+.download-progress-panel {
   margin-top: 0;
   padding: 17px;
   border: 1px solid var(--line-bright);
@@ -793,3 +804,170 @@ select option{background:var(--surface);color:var(--ink)}
   cursor: pointer;
 }
 .browse-location-button:disabled { opacity: .55; cursor: wait; }
+
+
+/* Download history progress and controls */
+[hidden] { display: none !important; }
+.history-progress-track {
+  width: 100%;
+  height: 6px;
+  margin-top: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255,255,255,.10);
+}
+.history-progress-fill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #00e5ff, #7c3aed);
+  transition: width .35s ease;
+}
+.history-live-progress { margin-top: 9px; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.history-item-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.history-cancel {
+  padding: 8px 11px;
+  border: 1px solid rgba(255,110,110,.55);
+  background: transparent;
+  color: #ff8d8d;
+  font-size: 11px;
+  cursor: pointer;
+}
+.history-item-actions button:disabled { opacity: .45; cursor: wait; }
+
+
+/* Keep the native desktop app responsive on older integrated/legacy graphics. */
+html.savevido-desktop { scroll-behavior: auto !important; }
+html.savevido-desktop body {
+  background: linear-gradient(135deg, oklch(10% .018 275), oklch(14% .02 275) 52%, oklch(11% .016 300));
+}
+html.savevido-desktop body::before,
+html.savevido-desktop body::after,
+html.savevido-desktop .noise {
+  display: none !important;
+}
+html.savevido-desktop .signal,
+html.savevido-desktop .result,
+html.savevido-desktop .download-progress-panel,
+html.savevido-desktop .tool-panel,
+html.savevido-desktop .history-drawer {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+html.savevido-desktop .orbit,
+html.savevido-desktop .download-progress-fill {
+  animation: none !important;
+}
+html.savevido-desktop .reveal {
+  opacity: 1 !important;
+  transform: none !important;
+  transition: none !important;
+}
+html.savevido-desktop *,
+html.savevido-desktop *::before,
+html.savevido-desktop *::after {
+  scroll-behavior: auto !important;
+}
+
+
+/* Desktop-only incremental update panel; website layout remains unchanged. */
+#savevidoUpdatePanel[hidden] { display:none !important; }
+#savevidoUpdatePanel {
+  position:fixed; inset:0; z-index:1000; display:grid; place-items:center;
+  padding:20px; background:rgba(3,5,12,.76);
+}
+.savevido-update-card {
+  position:relative; width:min(440px,100%); padding:28px;
+  border:1px solid var(--line-bright); border-radius:14px;
+  background:var(--surface); color:var(--ink); box-shadow:0 24px 80px rgba(0,0,0,.5);
+}
+.savevido-update-card h2 { margin:8px 0 12px; font-size:24px; }
+.savevido-update-card p { color:var(--muted); line-height:1.65; }
+.savevido-update-details { font-size:12px; }
+.savevido-update-close {
+  position:absolute; top:12px; right:12px; width:34px; height:34px;
+  border:1px solid var(--line); background:transparent; color:var(--ink); cursor:pointer;
+}
+#savevidoInstallUpdate {
+  margin-top:12px; padding:12px 18px; border:1px solid var(--lime);
+  border-radius:7px; background:var(--lime); color:var(--void);
+  font-weight:800; cursor:pointer;
+}
+#savevidoInstallUpdate:disabled { opacity:.6; cursor:wait; }
+html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
+
+/* Native desktop update widget */
+#savevidoUpdateIcon{position:fixed;z-index:10001;top:18px;right:22px;display:flex;align-items:center;gap:5px;border:1px solid rgba(130,140,255,.45);border-radius:20px;padding:7px 10px;background:#171a2b;color:#fff;cursor:pointer;box-shadow:0 5px 18px #0005}
+#savevidoUpdateIcon[hidden]{display:none}
+#savevidoUpdateIcon svg{width:19px;height:19px}
+#savevidoUpdatePercent{font:600 11px Manrope,sans-serif}
+#savevidoUpdatePanel{position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:20px;background:rgba(5,7,18,.78);backdrop-filter:blur(5px)}
+#savevidoUpdatePanel[hidden]{display:none}
+.savevido-update-card{position:relative;width:min(440px,100%);padding:28px;border:1px solid rgba(130,140,255,.35);border-radius:20px;background:#111426;color:#f7f7ff;box-shadow:0 20px 70px #0008}
+.savevido-update-card h2{margin:8px 0 12px;color:#fff}
+.savevido-update-card p{line-height:1.55}
+.savevido-update-close{position:absolute;right:13px;top:10px;border:0;background:transparent;color:#fff;font-size:25px;cursor:pointer}
+.savevido-update-card button:not(.savevido-update-close){border:0;border-radius:10px;padding:12px 18px;background:#6865f2;color:white;font-weight:700;cursor:pointer}
+.savevido-update-card button:disabled{opacity:.65;cursor:wait}
+.savevido-update-track{height:9px;overflow:hidden;border-radius:10px;background:#292d45}
+.savevido-update-track span{display:block;width:0;height:100%;border-radius:10px;background:linear-gradient(90deg,#6865f2,#38c9b4);transition:width .2s}
+#savevidoUpdateProgressText{font-size:12px;color:#c4c8df}
+.savevido-update-details{color:#c4c8df;font-size:13px}
+
+/* Native desktop updater controls */
+#savevidoCheckUpdate{position:fixed;top:14px;right:16px;z-index:9998;border:1px solid rgba(130,140,255,.45);border-radius:999px;padding:9px 14px;background:#171a2b;color:#f7f7ff;font:600 12px/1.2 system-ui,sans-serif;cursor:pointer;box-shadow:0 6px 24px rgba(0,0,0,.24)}
+#savevidoCheckUpdate:hover{background:#252a43}
+#savevidoCheckUpdate:disabled{opacity:.65;cursor:wait}
+#savevidoUpdateIcon{position:fixed;top:60px;right:18px;z-index:9998;display:flex;align-items:center;gap:5px;border:1px solid rgba(130,140,255,.45);border-radius:999px;padding:7px 10px;background:#171a2b;color:#fff;cursor:pointer}
+#savevidoUpdateIcon svg{width:17px;height:17px}
+
+
+/* Native desktop updater: keep controls in the header, not floating over page content. */
+.savevido-desktop #savevidoUpdateWidget{
+  display:flex;align-items:center;gap:12px;flex:0 0 auto;margin-left:8px;
+}
+.savevido-desktop #savevidoCheckUpdate{
+  position:static;z-index:auto;border:1px solid var(--line);border-radius:0;
+  padding:11px 15px;background:transparent;color:var(--ink);
+  font:inherit;font-size:12px;font-weight:600;line-height:1.2;letter-spacing:inherit;
+  box-shadow:none;white-space:nowrap;
+}
+.savevido-desktop #savevidoCheckUpdate:hover{border-color:var(--lime);color:var(--lime);background:transparent}
+.savevido-desktop #savevidoUpdateIcon{
+  position:static;z-index:auto;min-width:34px;min-height:34px;
+  display:flex;align-items:center;justify-content:center;gap:5px;
+  padding:6px 8px;border:1px solid var(--line);border-radius:0;
+  background:transparent;color:var(--lime);box-shadow:none;
+}
+.savevido-desktop #savevidoUpdateIcon[hidden]{display:none}
+.savevido-desktop #savevidoUpdateIcon svg{width:18px;height:18px}
+.savevido-desktop #savevidoUpdatePercent{font:500 10px "DM Mono",monospace}
+.savevido-desktop .site-header{gap:18px}
+.savevido-desktop .site-header nav{gap:clamp(12px,2vw,30px)}
+.savevido-desktop .site-header > div:not(#savevidoUpdateWidget){display:none!important}
+@media(max-width:1050px){
+  .savevido-desktop .site-header{flex-wrap:wrap;padding:12px 0}
+  .savevido-desktop #savevidoUpdateWidget{margin-left:auto}
+}
+
+
+/* Feedback form: keep contact details and optional one-time location clear. */
+.support-contact button.support-contact-link{
+  appearance:none;background:transparent;font:inherit;cursor:pointer;
+}
+.feedback-location-choice{
+  display:flex;align-items:flex-start;gap:12px;margin:0 0 18px;
+  color:var(--muted);font-size:12px;line-height:1.6;cursor:pointer;
+}
+.feedback-location-choice input{
+  flex:0 0 auto;width:16px;height:16px;margin:2px 0 0;accent-color:var(--lime);
+}
+.feedback-privacy-note{margin:0 0 18px;color:var(--muted);font-size:11px;line-height:1.6}
+
+
+/* One-time location consent shown at first desktop-app launch only. */
+#locationConsentPrompt[hidden]{display:none!important}
+#locationConsentPrompt:not([hidden]){position:fixed;inset:0;z-index:10000;display:grid;place-items:center;padding:22px;background:rgba(4,7,12,.82);backdrop-filter:blur(8px)}
+.location-consent-card{width:min(460px,100%);padding:28px;border:1px solid rgba(184,243,76,.35);border-radius:20px;background:#111722;color:#f4f6fa;box-shadow:0 24px 90px rgba(0,0,0,.5)}
+.location-consent-card h2{margin:8px 0 12px}.location-consent-card p{line-height:1.6;color:#c3c9d4}
+.location-consent-actions{display:flex;gap:12px;margin-top:20px}.location-consent-actions button{min-width:112px}

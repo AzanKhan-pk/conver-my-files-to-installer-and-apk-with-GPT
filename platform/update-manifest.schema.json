@@ -1,0 +1,87 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://savevido.example/schemas/update-manifest.schema.json",
+  "title": "SaveVido Update Manifest",
+  "type": "object",
+  "required": [
+    "product",
+    "version",
+    "released_at",
+    "release_notes",
+    "channels"
+  ],
+  "properties": {
+    "product": {
+      "const": "SaveVido"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][0-9A-Za-z.-]+)?$"
+    },
+    "released_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "release_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "minimum_supported_version": {
+      "type": "string"
+    },
+    "mandatory": {
+      "type": "boolean",
+      "default": false
+    },
+    "channels": {
+      "type": "object",
+      "required": [
+        "windows",
+        "android"
+      ],
+      "properties": {
+        "windows": {
+          "$ref": "#/$defs/artifact"
+        },
+        "android": {
+          "$ref": "#/$defs/artifact"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "required": [
+        "version",
+        "url",
+        "sha256"
+      ],
+      "properties": {
+        "version": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-fA-F0-9]{64}$"
+        },
+        "minimum_os": {
+          "type": "string"
+        },
+        "signature_url": {
+          "type": "string",
+          "format": "uri"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

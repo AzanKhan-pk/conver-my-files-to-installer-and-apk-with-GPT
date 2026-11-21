@@ -1,3 +1,8 @@
+// The native Qt desktop build uses a lighter rendering profile for older PCs.
+if (new URLSearchParams(window.location.search).has("desktop")) {
+  document.documentElement.classList.add("savevido-desktop");
+}
+
 const $ = (selector) => document.querySelector(selector);
 
 const urlInput = $("#url");
@@ -7,6 +12,10 @@ const resultBox = $("#result");
 const useBrowserSession = $("#useBrowserSession");
 const browserChoice = $("#browserChoice");
 const browserChoiceWrap = $("#browserChoiceWrap");
+const accountLink = $("#accountLink");
+if (accountLink && new URLSearchParams(window.location.search).has("desktop")) {
+  accountLink.addEventListener("click", (event) => { event.preventDefault(); window.location.href = "savevido://account"; });
+}
 
 let selectedMode = "video";
 let selectedQuality = "720p";
@@ -300,27 +309,22 @@ fetchButton.addEventListener("click", async () => {
         const isHostOrSubdomain = (domain) =>
           host === domain || host.endsWith("." + domain);
 
-        // Try gallery extraction on every safe, supported image-capable host.
-        // Video-only URLs simply fall back to the existing yt-dlp flow.
-        const supportedImageSites = [
-          "tiktok.com", "instagram.com", "facebook.com", "fb.com", "fb.watch",
-          "pinterest.com", "pin.it", "x.com", "twitter.com", "reddit.com", "redd.it",
-          "youtube.com", "youtube-nocookie.com", "youtu.be",
-          "vimeo.com", "dailymotion.com", "dai.ly",
-          "twitch.tv", "soundcloud.com", "snd.sc",
-          "bilibili.com", "b23.tv", "imgur.com",
-          "postimg.cc", "postimages.org", "imageshack.com",
-          "i.pinimg.com", "images.pinimg.com", "fbcdn.net", "fbsbx.com",
-          "cdninstagram.com", "tiktokcdn.com", "tiktokv.com",
-          "byteoversea.com", "twimg.com", "redditmedia.com",
-          "ytimg.com", "vimeocdn.com", "dmcdn.net",
-          "ttvnw.net", "jtvnw.net", "twitchcdn.net", "sndcdn.com",
-          "hdslb.com", "cloudinary.com", "cloudfront.net",
-          "images.unsplash.com"
-        ];
+        // Only call gallery-dl for links likely to contain an image gallery.
+        // Normal video links go directly to yt-dlp, avoiding a second slow request.
+        const isDirectImage = /\.(jpe?g|png|webp|gif|avif)$/i.test(path);
+        const isPinterestPin = isHostOrSubdomain("pinterest.com")
+          || isHostOrSubdomain("pin.it");
+        const isInstagramPost = isHostOrSubdomain("instagram.com")
+          && /^\/p\//.test(path);
+        const isFacebookPhotoPost = (
+          isHostOrSubdomain("facebook.com") || isHostOrSubdomain("fb.com")
+        ) && (/^\/(photo|photos)\//.test(path)
+          || /^\/share\/p\//.test(path));
+        const isTikTokPhotoPost = isHostOrSubdomain("tiktok.com")
+          && /^\/photo\//.test(path);
 
-        return /\.(jpe?g|png|webp|gif|avif)$/i.test(path)
-          || supportedImageSites.some(isHostOrSubdomain);
+        return isDirectImage || isPinterestPin || isInstagramPost
+          || isFacebookPhotoPost || isTikTokPhotoPost;
       } catch (_) {
         return false;
       }
@@ -443,723 +447,379 @@ async function downloadMedia() {
   }
 
   const downloadButton = $("#downloadBtn");
+  const media = {
+    url: currentVideo.url,
+    title: currentVideo.title || "video",
+    mode: selectedMode,
+    quality: selectedQuality
+  };
 
-  setButtonLoading(
-    downloadButton,
-    true,
-    "Starting...",
-    `Download ${selectedMode === "audio" ? "MP3" : "MP4"} ↗`
-  );
+  setButtonLoading(downloadButton, true, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "MP4"} ↗`);
 
   try {
     const response = await fetch("/api/download", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        url: currentVideo.url,
-        mode: selectedMode,
-        quality: selectedQuality
-      })
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url: media.url, mode: media.mode, quality: media.quality })
     });
-
     const data = await response.json();
-
     if (!response.ok || !data.ok || !data.job_id) {
-      throw new Error(
-        data.error || "Could not start the download."
-      );
+      throw new Error(data.error || "Could not start the download.");
     }
 
-    const jobId = data.job_id;
-
-    createDownloadPanel(downloadButton);
-
-    setStatus("Download started.", "success");
-
-    await monitorDownload(jobId);
-
+    const panel = createDownloadPanel(data.job_id, media.title);
+    setStatus("Download started. You can start another download while this one runs.", "success");
+    monitorDownload(data.job_id, panel, media).catch(error => {
+      console.error("Download monitor error:", error);
+      setDownloadProgressMessage(panel, error.message || "Download failed.", true);
+      disableDownloadControls(panel);
+    });
   } catch (error) {
-    console.error("Download error:", error);
-
-    setStatus(
-      error.message || "Download failed.",
-      "error"
-    );
-
-    removeDownloadPanel();
+    console.error("Download start error:", error);
+    setStatus(error.message || "Download failed.", "error");
   } finally {
-    setButtonLoading(
-      downloadButton,
-      false,
-      "Starting...",
-      `Download ${selectedMode === "audio" ? "MP3" : "MP4"} ↗`
-    );
+    setButtonLoading(downloadButton, false, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "MP4"} ↗`);
   }
 }
 
 function formatBytes(bytes) {
-  if (!bytes || bytes <= 0) {
-    return "0 B";
-  }
-
-  const units = [
-    "B",
-    "KB",
-    "MB",
-    "GB",
-    "TB"
-  ];
-
-  const index = Math.floor(
-    Math.log(bytes) / Math.log(1024)
-  );
-
-  const safeIndex = Math.min(
-    index,
-    units.length - 1
-  );
-
-  const value =
-    bytes / Math.pow(1024, safeIndex);
-
-  if (safeIndex === 0) {
-    return `${Math.round(value)} ${units[safeIndex]}`;
-  }
-
-  return `${value.toFixed(2)} ${units[safeIndex]}`;
+  if (!bytes || bytes <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1);
+  const value = bytes / Math.pow(1024, index);
+  return index === 0 ? `${Math.round(value)} ${units[index]}` : `${value.toFixed(2)} ${units[index]}`;
 }
-function createDownloadPanel(downloadButton) {
-  removeDownloadPanel();
+
+function createDownloadPanel(jobId, title) {
+  const activityList = $("#downloadActivityList");
+  const existingPanel = activityList?.querySelector(`.download-progress-panel[data-job-id="${CSS.escape(jobId)}"]`);
+  if (existingPanel) {
+    const existingTitle = existingPanel.querySelector(".download-progress-title");
+    if (existingTitle && title) existingTitle.textContent = title;
+    showRunningControls(existingPanel);
+    return existingPanel;
+  }
 
   const panel = document.createElement("div");
-
-  panel.id = "downloadProgressPanel";
-
+  panel.className = "download-progress-panel";
+  panel.dataset.jobId = jobId;
   panel.innerHTML = `
     <div class="download-progress-header">
-      <strong id="downloadProgressTitle">
-        Downloading...
-      </strong>
-
-      <span id="downloadProgressPercent">
-        0%
-      </span>
+      <strong class="download-progress-title">${escapeHtml(title || "Downloading...")}</strong>
+      <span data-role="percent">0%</span>
     </div>
-
-    <div class="download-progress-bar">
-      <div
-        id="downloadProgressFill"
-        class="download-progress-fill"
-        style="width: 0%"
-      ></div>
-    </div>
-
+    <div class="download-progress-bar"><div data-role="fill" class="download-progress-fill" style="width:0%"></div></div>
     <div class="download-progress-info">
-      <span id="downloadProgressSize">
-        0 B / 0 B
-      </span>
-
-      <span id="downloadProgressSpeed">
-        0 B/s
-      </span>
+      <span data-role="size">0 B / 0 B</span>
+      <span data-role="speed">0 B/s</span>
     </div>
-
     <div class="download-progress-actions">
-
-      <button
-        id="pauseDownloadBtn"
-        type="button"
-      >
-        ⏸ Pause
-      </button>
-
-      <button
-        id="resumeDownloadBtn"
-        type="button"
-        hidden
-      >
-        ▶ Resume
-      </button>
-
-      <button
-        id="cancelDownloadBtn"
-        type="button"
-      >
-        ✕ Cancel
-      </button>
-
+      <button data-action="pause" type="button">⏸ Pause</button>
+      <button data-action="resume" type="button" hidden>▶ Resume</button>
+      <button data-action="cancel" type="button">✕ Cancel</button>
     </div>
-
-    <div
-      id="downloadProgressMessage"
-      class="download-progress-message"
-    >
-      Preparing download...
-    </div>
+    <div data-role="message" class="download-progress-message">Preparing download...</div>
   `;
 
-  const activityList = $("#downloadActivityList");
-  (activityList || downloadButton.parentElement).appendChild(panel);
+  (activityList || $("#downloadBtn").parentElement).appendChild(panel);
 
-  window.currentDownloadJobId = null;
-
-  panel.querySelector("#pauseDownloadBtn")
-    .addEventListener("click", async () => {
-      const jobId = window.currentDownloadJobId;
-
-      if (!jobId) return;
-
-      try {
-        const response = await fetch(
-          `/api/download/${jobId}/pause`,
-          {
-            method: "POST"
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.ok) {
-          throw new Error(
-            data.error || "Could not pause download."
-          );
-        }
-
-        showPausedControls();
-
-      } catch (error) {
-        setDownloadProgressMessage(
-          error.message,
-          true
-        );
-      }
-    });
-
-  panel.querySelector("#resumeDownloadBtn")
-    .addEventListener("click", async () => {
-      const jobId = window.currentDownloadJobId;
-
-      if (!jobId) return;
-
-      try {
-        const response = await fetch(
-          `/api/download/${jobId}/resume`,
-          {
-            method: "POST"
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.ok) {
-          throw new Error(
-            data.error || "Could not resume download."
-          );
-        }
-
-        showRunningControls();
-
-      } catch (error) {
-        setDownloadProgressMessage(
-          error.message,
-          true
-        );
-      }
-    });
-
-  panel.querySelector("#cancelDownloadBtn")
-    .addEventListener("click", async () => {
-      const jobId = window.currentDownloadJobId;
-
-      if (!jobId) return;
-
-      try {
-        const response = await fetch(
-          `/api/download/${jobId}/cancel`,
-          {
-            method: "POST"
-          }
-        );
-
-        const data = await response.json();
-
-        if (!response.ok || !data.ok) {
-          throw new Error(
-            data.error || "Could not cancel download."
-          );
-        }
-
-        setDownloadProgressMessage(
-          "Download cancelled.",
-          true
-        );
-
-        showPausedControls();
-
-        const pauseButton =
-          $("#pauseDownloadBtn");
-
-        const resumeButton =
-          $("#resumeDownloadBtn");
-
-        const cancelButton =
-          $("#cancelDownloadBtn");
-
-        if (pauseButton) pauseButton.disabled = true;
-        if (resumeButton) resumeButton.disabled = true;
-        if (cancelButton) cancelButton.disabled = true;
-
-      } catch (error) {
-        setDownloadProgressMessage(
-          error.message,
-          true
-        );
-      }
-    });
+  panel.querySelector('[data-action="pause"]').addEventListener("click", () =>
+    controlDownload(panel, jobId, "pause"));
+  panel.querySelector('[data-action="resume"]').addEventListener("click", () =>
+    controlDownload(panel, jobId, "resume"));
+  panel.querySelector('[data-action="cancel"]').addEventListener("click", () =>
+    controlDownload(panel, jobId, "cancel"));
+  return panel;
 }
 
-
-async function monitorDownload(jobId) {
-  window.currentDownloadJobId = jobId;
-
-  while (true) {
-    await new Promise(resolve =>
-      setTimeout(resolve, 1000)
-    );
-
-    const response = await fetch(
-      `/api/download/${jobId}/status`
-    );
-
+async function controlDownload(panel, jobId, action) {
+  try {
+    const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/${action}`, { method: "POST" });
     const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        data.error || "Could not read download status."
-      );
+    if (!response.ok || !data.ok) throw new Error(data.error || `Could not ${action} download.`);
+    if (action === "pause" || action === "cancel") showPausedControls(panel);
+    if (action === "resume") showRunningControls(panel);
+    if (action === "cancel") {
+      setDownloadProgressMessage(panel, "Download cancelled.", true);
+      disableDownloadControls(panel);
     }
+  } catch (error) {
+    setDownloadProgressMessage(panel, error.message, true);
+  }
+}
+
+async function monitorDownload(jobId, panel, media) {
+  while (panel.isConnected) {
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/status`);
+    const data = await response.json();
+    if (!response.ok || !data.ok) throw new Error(data.error || "Could not read download status.");
 
     const job = data.job;
-
-    const percent =
-      Number(job.percent || 0);
-
-    const downloaded =
-      formatBytes(
-        job.downloaded_bytes || 0
-      );
-
-    const total =
-      formatBytes(
-        job.total_bytes || 0
-      );
-
-    const speed =
-      formatBytes(
-        job.speed || 0
-      );
-
-    updateDownloadProgress(
-      percent,
-      downloaded,
-      total,
-      speed
-    );
-
+    const percent = Number(job.percent || 0);
+    const downloaded = formatBytes(job.downloaded_bytes || 0);
+    const total = formatBytes(job.total_bytes || 0);
+    const speed = formatBytes(job.speed || 0);
+    updateDownloadProgress(panel, percent, downloaded, total, speed);
     updateDownloadNotification(job);
 
-    if (
-      job.status === "starting" ||
-      job.status === "preparing"
-    ) {
-      setDownloadProgressMessage(
-        "Preparing download..."
-      );
-
-      showRunningControls();
-    }
-
-    if (job.status === "downloading") {
-      setDownloadProgressMessage(
-        "Downloading..."
-      );
-
-      showRunningControls();
-    }
-
-    if (job.status === "paused") {
-      setDownloadProgressMessage(
-        "Download paused."
-      );
-
-      showPausedControls();
-    }
-
-    if (job.status === "network_error") {
-
-      setDownloadProgressMessage(
-        "⚠ Network issue detected. Waiting for connection...",
-        true
-      );
-
-      showPausedControls();
-
-      /*
-       * Try to resume automatically after 5 seconds.
-       */
-      await new Promise(resolve =>
-        setTimeout(resolve, 5000)
-      );
-
-      try {
-        const resumeResponse = await fetch(
-          `/api/download/${jobId}/resume`,
-          {
-            method: "POST"
-          }
-        );
-
-        const resumeData =
-          await resumeResponse.json();
-
-        if (
-          resumeResponse.ok &&
-          resumeData.ok
-        ) {
-          showRunningControls();
-
-          setDownloadProgressMessage(
-            "Connection restored. Resuming..."
-          );
-        }
-
-      } catch (error) {
-        console.log(
-          "Automatic resume waiting:",
-          error
-        );
-      }
-
+    if (["starting", "preparing"].includes(job.status)) {
+      setDownloadProgressMessage(panel, "Preparing download...");
+      showRunningControls(panel);
+    } else if (job.status === "downloading" || job.status === "processing") {
+      setDownloadProgressMessage(panel, job.status === "processing" ? "Processing media..." : "Downloading...");
+      showRunningControls(panel);
+    } else if (job.status === "paused") {
+      setDownloadProgressMessage(panel, "Download paused.");
+      showPausedControls(panel);
+    } else if (job.status === "network_error") {
+      setDownloadProgressMessage(panel, "Network issue. Waiting to reconnect...", true);
+      showPausedControls(panel);
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      await controlDownload(panel, jobId, "resume");
       continue;
-    }
-
-    if (job.status === "processing") {
-      setDownloadProgressMessage(
-        "Processing video..."
-      );
-
-      showRunningControls();
-    }
-
-    if (job.status === "cancelled") {
-
-      setDownloadProgressMessage(
-        "Download cancelled.",
-        true
-      );
-
-      disableDownloadControls();
-
-      break;
-    }
-
-    if (job.status === "error") {
-      throw new Error(
-        job.error || "Download failed."
-      );
-    }
-
-    if (job.status === "completed") {
-
-      updateDownloadProgress(
-        100,
-        formatBytes(
-          job.downloaded_bytes || 0
-        ),
-        formatBytes(
-          job.total_bytes || 0
-        ),
-        "0 B/s"
-      );
-
-      setDownloadProgressMessage(
-        "Download complete. Preparing file..."
-      );
-
-      const fileResponse = await fetch(
-        `/api/download/${jobId}/file`
-      );
-
+    } else if (job.status === "cancelled") {
+      setDownloadProgressMessage(panel, "Download cancelled.", true);
+      disableDownloadControls(panel);
+      return;
+    } else if (job.status === "error") {
+      throw new Error(job.error || "Download failed.");
+    } else if (job.status === "completed") {
+      updateDownloadProgress(panel, 100, formatBytes(job.downloaded_bytes || 0), formatBytes(job.total_bytes || 0), "0 B");
+      setDownloadProgressMessage(panel, "Download complete. Preparing file...");
+      const fileResponse = await fetch(`/api/download/${encodeURIComponent(jobId)}/file`);
       if (!fileResponse.ok) {
-        let errorMessage =
-          "Could not retrieve the downloaded file.";
-
-        try {
-          const errorData =
-            await fileResponse.json();
-
-          errorMessage =
-            errorData.error ||
-            errorMessage;
-
-        } catch (_) {}
-
-        throw new Error(errorMessage);
+        let message = "Could not retrieve the downloaded file.";
+        try { const errorData = await fileResponse.json(); message = errorData.error || message; } catch (_) {}
+        throw new Error(message);
       }
-
-      const fileBlob =
-        await fileResponse.blob();
-
-      if (!fileBlob.size) {
-        throw new Error(
-          "Downloaded file is empty."
-        );
-      }
-
-      const temporaryUrl =
-        URL.createObjectURL(fileBlob);
-
-      const downloadLink =
-        document.createElement("a");
-
-      const safeFileName =
-        (currentVideo.title || "video")
-          .replace(/[^\w\s.-]/g, "")
-          .trim()
-          .slice(0, 90) || "video";
-
-      const extension =
-        selectedMode === "audio"
-          ? "mp3"
-          : "mp4";
-
-      downloadLink.href =
-        temporaryUrl;
-
-      downloadLink.download =
-        `${safeFileName}.${extension}`;
-
-      document.body.appendChild(
-        downloadLink
-      );
-
-      downloadLink.click();
-
-      downloadLink.remove();
-
-      setTimeout(() => {
-        URL.revokeObjectURL(
-          temporaryUrl
-        );
-      }, 5000);
-
-      setDownloadProgressMessage(
-        "✓ Download completed.",
-        false
-      );
-
-      disableDownloadControls();
+      const blob = await fileResponse.blob();
+      if (!blob.size) throw new Error("Downloaded file is empty.");
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const safeName = (job.title || media.title || "video").replace(/[^\w\s.-]/g, "").trim().slice(0, 90) || "video";
+      link.href = url;
+      link.download = `${safeName}.${media.mode === "audio" ? "mp3" : "mp4"}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 5000);
+      setDownloadProgressMessage(panel, "✓ Download completed.");
+      disableDownloadControls(panel);
       await showCompletedNotification(job);
       await loadDownloadHistory();
-      removeDownloadPanel();
-
-      break;
+      return;
     }
   }
-
-  window.currentDownloadJobId = null;
 }
 
-
-function updateDownloadProgress(
-  percent,
-  downloaded,
-  total,
-  speed
-) {
-  const percentElement =
-    $("#downloadProgressPercent");
-
-  const fillElement =
-    $("#downloadProgressFill");
-
-  const sizeElement =
-    $("#downloadProgressSize");
-
-  const speedElement =
-    $("#downloadProgressSpeed");
-
-  if (percentElement) {
-    percentElement.textContent =
-      `${percent.toFixed(1)}%`;
-  }
-
-  if (fillElement) {
-    fillElement.style.width =
-      `${Math.min(percent, 100)}%`;
-  }
-
-  if (sizeElement) {
-    sizeElement.textContent =
-      `${downloaded} / ${total}`;
-  }
-
-  if (speedElement) {
-    speedElement.textContent =
-      `${speed}/s`;
-  }
+function updateDownloadProgress(panel, percent, downloaded, total, speed) {
+  const percentElement = panel.querySelector('[data-role="percent"]');
+  const fillElement = panel.querySelector('[data-role="fill"]');
+  const sizeElement = panel.querySelector('[data-role="size"]');
+  const speedElement = panel.querySelector('[data-role="speed"]');
+  if (percentElement) percentElement.textContent = `${percent.toFixed(1)}%`;
+  if (fillElement) fillElement.style.width = `${Math.min(percent, 100)}%`;
+  if (sizeElement) sizeElement.textContent = `${downloaded} / ${total}`;
+  if (speedElement) speedElement.textContent = `${speed}/s`;
 }
 
-
-function setDownloadProgressMessage(
-  message,
-  error = false
-) {
-  const element =
-    $("#downloadProgressMessage");
-
+function setDownloadProgressMessage(panel, message, error = false) {
+  const element = panel.querySelector('[data-role="message"]');
   if (!element) return;
-
   element.textContent = message;
-
-  element.classList.toggle(
-    "error",
-    error
-  );
+  element.classList.toggle("error", error);
 }
 
-
-function showRunningControls() {
-  const pauseButton =
-    $("#pauseDownloadBtn");
-
-  const resumeButton =
-    $("#resumeDownloadBtn");
-
-  if (pauseButton) {
-    pauseButton.hidden = false;
-    pauseButton.disabled = false;
-  }
-
-  if (resumeButton) {
-    resumeButton.hidden = true;
-    resumeButton.disabled = false;
-  }
+function showRunningControls(panel) {
+  const pause = panel.querySelector('[data-action="pause"]');
+  const resume = panel.querySelector('[data-action="resume"]');
+  if (pause) { pause.hidden = false; pause.disabled = false; }
+  if (resume) { resume.hidden = true; resume.disabled = false; }
 }
 
-
-function showPausedControls() {
-  const pauseButton =
-    $("#pauseDownloadBtn");
-
-  const resumeButton =
-    $("#resumeDownloadBtn");
-
-  if (pauseButton) {
-    pauseButton.hidden = true;
-  }
-
-  if (resumeButton) {
-    resumeButton.hidden = false;
-    resumeButton.disabled = false;
-  }
+function showPausedControls(panel) {
+  const pause = panel.querySelector('[data-action="pause"]');
+  const resume = panel.querySelector('[data-action="resume"]');
+  if (pause) pause.hidden = true;
+  if (resume) { resume.hidden = false; resume.disabled = false; }
 }
 
-
-function disableDownloadControls() {
-  const pauseButton =
-    $("#pauseDownloadBtn");
-
-  const resumeButton =
-    $("#resumeDownloadBtn");
-
-  const cancelButton =
-    $("#cancelDownloadBtn");
-
-  if (pauseButton) {
-    pauseButton.disabled = true;
-  }
-
-  if (resumeButton) {
-    resumeButton.disabled = true;
-  }
-
-  if (cancelButton) {
-    cancelButton.disabled = true;
-  }
+function disableDownloadControls(panel) {
+  panel.querySelectorAll(".download-progress-actions button").forEach(button => { button.disabled = true; });
 }
 
+const feedbackEndpoint = "https://savevido-owner-dashboard.vercel.app/api/feedback";
+const feedbackForm = $("#commentForm");
+const feedbackStatus = $("#commentStatus");
+const supportFeedbackButton = $("#supportFeedbackBtn");
+const LOCATION_DECISION_KEY = "savevido_location_decision_v1";
+const LOCATION_PENDING_KEY = "savevido_feedback_location_pending_v1";
+supportFeedbackButton?.addEventListener("click", () => {
+  $("#comment").value = "Url:\nSite/App:\nError:\n\nAdditional details:\n";
+  feedbackForm?.scrollIntoView({ behavior: "smooth", block: "center" });
+  $("#comment")?.focus();
+  if (feedbackStatus) { feedbackStatus.textContent = "Add your name, one contact method, and details before sending."; feedbackStatus.className = "status"; }
+});
+async function requestLocationOnce() {
+  if (!new URLSearchParams(window.location.search).has("desktop")) return;
+  const prompt = $("#locationConsentPrompt");
+  if (!prompt) return;
 
-function removeDownloadPanel() {
-  const panel =
-    $("#downloadProgressPanel");
+  const status = $("#locationConsentStatus");
+  const allow = $("#locationAllowBtn");
+  const deny = $("#locationDenyBtn");
+  const turnOn = $("#locationTurnOnBtn");
+  const title = $("#locationConsentTitle");
+  const eyebrow = prompt.querySelector(".eyebrow");
+  const description = title?.nextElementSibling;
+  let savedDecision = null;
+  let checkingLocation = false;
 
-  if (panel) {
-    panel.remove();
-  }
+  const showConsent = () => {
+    if (eyebrow) eyebrow.textContent = "OPTIONAL · YOUR CHOICE";
+    if (title) title.textContent = "Allow your location?";
+    if (description) description.textContent = "Sharing your approximate current location is optional and can help troubleshoot a problem. It is attached only if you later submit feedback.";
+    if (allow) allow.hidden = false;
+    if (deny) deny.hidden = false;
+    if (turnOn) turnOn.hidden = true;
+    if (status) status.textContent = "";
+    prompt.hidden = false;
+  };
 
-  window.currentDownloadJobId = null;
-}
+  const showLocationOff = () => {
+    if (eyebrow) eyebrow.textContent = "LOCATION IS OFF";
+    if (title) title.textContent = "Please turn on your location";
+    if (description) description.textContent = "You allowed location access, but device Location Services are currently off or blocked. Turn them on to continue. This message will remain until location is available.";
+    if (allow) allow.hidden = true;
+    if (deny) deny.hidden = true;
+    if (turnOn) {
+      turnOn.hidden = false;
+      turnOn.textContent = "Turn on location";
+    }
+    if (status) status.textContent = "";
+    prompt.hidden = false;
+  };
 
-$("#commentForm").addEventListener("submit", async (event) => {
-  event.preventDefault();
+  const saveDecision = async decision => {
+    const response = await fetch("/api/location-consent", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision })
+    });
+    if (!response.ok) throw new Error("Could not save your choice on this device.");
+  };
 
-  const form = event.currentTarget;
-  const submitButton = form.querySelector("button");
-  const commentStatus = $("#commentStatus");
+  const checkDeviceLocation = async () => {
+    if (checkingLocation) return;
+    checkingLocation = true;
+    try {
+      if (!navigator.geolocation) throw new Error("unavailable");
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: false,
+          timeout: 10000,
+          maximumAge: 60000
+        });
+      });
+      const data = {
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+        location_accuracy_m: position.coords.accuracy
+      };
+      sessionStorage.setItem(LOCATION_PENDING_KEY, JSON.stringify(data));
+      prompt.hidden = true;
+      return true;
+    } catch (error) {
+      sessionStorage.removeItem(LOCATION_PENDING_KEY);
+      showLocationOff();
+      return false;
+    } finally {
+      checkingLocation = false;
+    }
+  };
 
-  const name = $("#name").value.trim();
-  const comment = $("#comment").value.trim();
-
-  if (!name || !comment) {
-    commentStatus.textContent = "Please complete both fields.";
-    commentStatus.className = "status error";
+  try {
+    const saved = await fetch("/api/location-consent", { cache: "no-store" })
+      .then(response => response.ok ? response.json() : Promise.reject(new Error("Could not read saved location preference.")));
+    savedDecision = saved.decision;
+  } catch (error) {
+    if (status) status.textContent = "Could not check the saved permission choice. Please restart the app or try again.";
+    prompt.hidden = false;
     return;
   }
 
-  submitButton.disabled = true;
-  submitButton.textContent = "Saving...";
-
-  commentStatus.textContent = "Saving your note...";
-  commentStatus.className = "status";
-
-  try {
-    const response = await fetch("/api/comments", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        name,
-        comment
-      })
+  if (savedDecision === "allowed") {
+    await checkDeviceLocation();
+    // Re-check after returning from Windows Location Settings or restoring the app.
+    window.addEventListener("focus", () => checkDeviceLocation());
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkDeviceLocation();
     });
-
-    const data = await response.json();
-
-    if (!response.ok || !data.ok) {
-      throw new Error(
-        data.error || "Could not save your feedback."
-      );
-    }
-
-    commentStatus.textContent =
-      data.message || "Thanks, your feedback is saved.";
-    commentStatus.className = "status success";
-
-    form.reset();
-  } catch (error) {
-    commentStatus.textContent =
-      error.message || "Could not save your feedback.";
-    commentStatus.className = "status error";
-  } finally {
-    submitButton.disabled = false;
-    submitButton.innerHTML = "Send feedback <span>↗</span>";
+    turnOn?.addEventListener("click", () => {
+      window.location.href = "savevido://open-location-settings";
+    });
+    return;
   }
-});
 
+  // A previous Deny is intentionally not treated as permanent: ask again on every launch.
+  showConsent();
+
+  deny?.addEventListener("click", async () => {
+    deny.disabled = true;
+    try {
+      await saveDecision("denied");
+      prompt.hidden = true;
+    } catch (error) {
+      if (status) status.textContent = error.message;
+    } finally {
+      deny.disabled = false;
+    }
+  });
+
+  allow?.addEventListener("click", async () => {
+    allow.disabled = true;
+    deny.disabled = true;
+    if (status) status.textContent = "Saving your permission and checking device location…";
+    try {
+      // Persist the user's Allow choice even if Windows Location Services are off.
+      // This lets future launches show the persistent 'turn on location' notice.
+      await saveDecision("allowed");
+      savedDecision = "allowed";
+      await checkDeviceLocation();
+      window.addEventListener("focus", () => checkDeviceLocation());
+      document.addEventListener("visibilitychange", () => {
+        if (!document.hidden) checkDeviceLocation();
+      });
+      turnOn?.addEventListener("click", () => {
+        window.location.href = "savevido://open-location-settings";
+      });
+    } catch (error) {
+      if (status) status.textContent = error.message;
+      allow.disabled = false;
+      deny.disabled = false;
+    }
+  });
+}
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", requestLocationOnce, { once: true }); else requestLocationOnce();
+feedbackForm?.addEventListener("submit", async event => {
+  event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"]');
+  const nickname = $("#name").value.trim(), email = $("#feedbackEmail").value.trim(), whatsapp = $("#feedbackWhatsapp").value.trim(), message = $("#comment").value.trim();
+  if (nickname.length < 2 || !message || (!email && !whatsapp)) { feedbackStatus.textContent = "Enter your name, message, and at least one contact method (email or WhatsApp)."; feedbackStatus.className = "status error"; return; }
+  button.disabled = true; button.textContent = "Sending feedback…"; feedbackStatus.textContent = "Sending your feedback securely…"; feedbackStatus.className = "status";
+  try {
+    let location = null; try { location = JSON.parse(sessionStorage.getItem(LOCATION_PENDING_KEY) || "null"); } catch (_) {}
+    const urlMatch = message.match(/^Url:\s*(https?:\/\/\S+)/im), appMatch = message.match(/^Site\/App:\s*(.*)$/im), errorMatch = message.match(/^Error:\s*([\s\S]*?)(?:\n\s*\n|$)/im);
+    const response = await fetch(feedbackEndpoint, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({
+      nickname, email, whatsapp_number: whatsapp, message, source_url: urlMatch ? urlMatch[1] : "", source_app: appMatch ? appMatch[1].trim() : "SaveVido",
+      error_details: errorMatch ? errorMatch[1].trim() : "", location_consent: Boolean(location), ...(location || {}), website: $("#feedbackWebsite").value
+    }) });
+    const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || "Could not save your feedback.");
+    feedbackStatus.textContent = data.message || "Thank you. Your feedback was saved securely."; feedbackStatus.className = "status success";
+    sessionStorage.removeItem(LOCATION_PENDING_KEY); form.reset();
+  } catch (error) { feedbackStatus.textContent = error.message || "Could not save your feedback."; feedbackStatus.className = "status error"; }
+  finally { button.disabled = false; button.innerHTML = "Send feedback <span>↗</span>"; }
+});
 const revealObserver = new IntersectionObserver(
   (entries) => {
     entries.forEach((entry) => {
@@ -1293,9 +953,22 @@ function renderDownloadHistory(items) {
     } else if (active) {
       action = '<span class="history-file-missing">Working…</span>';
     }
+    const percent = Math.max(0, Math.min(100, Number(item.percent || 0)));
     const progress = status === "completed"
       ? "Completed"
-      : `${escapeHtml(status.replaceAll("_", " "))} · ${Number(item.percent || 0).toFixed(1)}% · ${formatBytes(item.downloaded_bytes || 0)} / ${formatBytes(item.total_bytes || 0)}`;
+      : `${escapeHtml(status.replaceAll("_", " "))} · ${percent.toFixed(1)}% · ${formatBytes(item.downloaded_bytes || 0)} / ${formatBytes(item.total_bytes || 0)}`;
+    const progressTrack = status === "completed" ? "" : `
+      <div class="history-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percent}">
+        <div class="history-progress-fill" style="width:${percent}%"></div>
+      </div>`;
+    let controls = action;
+    if (jobId && active) {
+      controls = `<button type="button" class="history-open-folder" data-pause-job="${jobId}">Pause</button>
+        <button type="button" class="history-cancel" data-cancel-job="${jobId}">Cancel</button>`;
+    } else if (jobId && resumable) {
+      controls = `<button type="button" class="history-open-folder" data-resume-job="${jobId}">Resume</button>
+        <button type="button" class="history-cancel" data-cancel-job="${jobId}">Cancel</button>`;
+    }
     return `
       <article class="history-item" data-history-id="${Number(item.id) || ""}" data-job-id="${jobId}">
         <div class="history-item-heading">
@@ -1305,7 +978,8 @@ function renderDownloadHistory(items) {
         <p>${meta}</p>
         <small>${date}</small>
         <div class="history-live-progress">${progress}</div>
-        <div class="history-item-actions">${action}</div>
+        ${progressTrack}
+        <div class="history-item-actions">${controls}</div>
       </article>
     `;
   }).join("");
@@ -1338,10 +1012,15 @@ async function monitorHistoryJob(jobId, itemElement) {
       if (!response.ok || !data.ok) throw new Error(data.error || "Status unavailable.");
       const job = data.job;
       const statusElement = itemElement.querySelector(".history-live-progress");
+      const progressFill = itemElement.querySelector(".history-progress-fill");
+      const progressTrack = itemElement.querySelector(".history-progress-track");
+      const percent = Math.max(0, Math.min(100, Number(job.percent || 0)));
       if (statusElement) {
         statusElement.textContent =
-          `${job.status} · ${Number(job.percent || 0).toFixed(1)}% · ${formatBytes(job.downloaded_bytes || 0)} / ${formatBytes(job.total_bytes || 0)}`;
+          `${job.status} · ${percent.toFixed(1)}% · ${formatBytes(job.downloaded_bytes || 0)} / ${formatBytes(job.total_bytes || 0)}`;
       }
+      if (progressFill) progressFill.style.width = `${percent}%`;
+      if (progressTrack) progressTrack.setAttribute("aria-valuenow", String(percent));
       if (["paused", "network_error", "completed", "error", "cancelled"].includes(job.status)) {
         await loadDownloadHistory();
         return;
@@ -1380,10 +1059,53 @@ historyList?.addEventListener("click", async (event) => {
       const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/resume`, { method: "POST" });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not resume download.");
-      await monitorHistoryJob(jobId, itemElement);
+      const panel = createDownloadPanel(jobId, itemElement?.querySelector(".history-item-heading strong")?.textContent || "Resuming download...");
+      // Close the history drawer so the restored live progress panel is visible.
+      setHistoryOpen(false);
+      panel.scrollIntoView({ behavior: "auto", block: "center" });
+      const statusResponse = await fetch(`/api/download/${encodeURIComponent(jobId)}/status`);
+      const statusData = await statusResponse.json();
+      if (statusResponse.ok && statusData.ok) {
+        const job = statusData.job;
+        updateDownloadProgress(
+          panel,
+          Number(job.percent || 0),
+          formatBytes(job.downloaded_bytes || 0),
+          formatBytes(job.total_bytes || 0),
+          formatBytes(job.speed || 0)
+        );
+      }
+      showRunningControls(panel);
+      setDownloadProgressMessage(panel, "Resuming from saved progress...");
+      const media = {
+        title: itemElement?.querySelector(".history-item-heading strong")?.textContent || "video",
+        mode: statusData?.job?.mode || "video",
+      };
+      monitorDownload(jobId, panel, media).catch(error => {
+        console.error("Resumed download monitor error:", error);
+        setDownloadProgressMessage(panel, error.message || "Download failed.", true);
+        disableDownloadControls(panel);
+      });
+      await loadDownloadHistory();
     } catch (error) {
       resumeButton.disabled = false;
       alert(error.message || "Could not resume download.");
+    }
+    return;
+  }
+
+  const cancelButton = event.target.closest("[data-cancel-job]");
+  if (cancelButton) {
+    const jobId = cancelButton.dataset.cancelJob;
+    cancelButton.disabled = true;
+    try {
+      const response = await fetch(`/api/download/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error(data.error || "Could not cancel download.");
+      await loadDownloadHistory();
+    } catch (error) {
+      cancelButton.disabled = false;
+      alert(error.message || "Could not cancel download.");
     }
     return;
   }

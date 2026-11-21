@@ -1,0 +1,48 @@
+{
+  "product": "SaveVido",
+  "current_version": "1.0.188",
+  "updated_at": "2026-11-21T09:24:48.852733Z",
+  "update_service": {
+    "status": "Latest Windows release published automatically from GitHub commits.",
+    "manifest_url": "https://savevido-central-platform.vercel.app/release-config.json",
+    "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases",
+    "channels": {
+      "windows_latest": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido-Setup.exe",
+      "android_latest": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido.apk",
+      "microsoft_store": "https://www.microsoft.com/store/apps"
+    }
+  },
+  "channels": {
+    "windows": {
+      "version": "1.0.188",
+      "status": "Available: latest verified Windows installer.",
+      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/download/v1.0.188/SaveVido-Setup.exe",
+      "minimum_os": "Windows 10/11",
+      "sha256": "2ff6a63d1eea40cadfcdb31b287fdbc7017ed4ddd03a27ba5b80ac6bcd104ed9",
+      "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
+    },
+    "android": {
+      "version": null,
+      "status": "Android app is being developed. APK download will be enabled after a real installable package is built and checked.",
+      "download_url": null,
+      "minimum_os": "Android 8.0+",
+      "sha256": null,
+      "latest_download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/latest/download/SaveVido.apk",
+      "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
+    },
+    "microsoft_store": {
+      "version": null,
+      "status": "Reserved for future MSIX package and Microsoft Store publication.",
+      "download_url": null,
+      "product_page_url": null,
+      "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
+    }
+  },
+  "ads": {
+    "enabled": false,
+    "provider": null,
+    "placements": [],
+    "consent_required": true,
+    "note": "Advertising remains disabled until an age-appropriate provider, privacy review and publisher approval are configured."
+  }
+}

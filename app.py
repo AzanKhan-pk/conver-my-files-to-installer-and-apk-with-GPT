@@ -8,6 +8,7 @@ import sqlite3
 import json
 import tempfile
 import threading
+import time
 import uuid
 from datetime import datetime, timezone
 from email.message import EmailMessage
@@ -29,20 +30,99 @@ from flask import (
 )
 
 BASE_DIR = Path(__file__).resolve().parent
-DB_PATH = BASE_DIR / "analytics.db"
+
+# Keep writable user data out of Program Files / the bundled application folder.
+if getattr(sys, "frozen", False) and os.name == "nt":
+    APP_DATA_DIR = Path(os.getenv("LOCALAPPDATA", str(Path.home() / "AppData" / "Local"))) / "SaveVido"
+else:
+    APP_DATA_DIR = BASE_DIR
+APP_DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = APP_DATA_DIR / "analytics.db"
 
 # Keep partial downloads outside the OS temp directory so they survive
 # reboots and Windows temporary-file cleanup.
-DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
+# Prefer a simple C:\\Downloads\\SaveVido destination on Windows. If the
+# machine restricts writes to the drive root, fall back to the user's Downloads.
+if os.name == "nt":
+    DEFAULT_DOWNLOAD_ROOT = Path(os.getenv("SystemDrive", "C:")) / "Downloads" / "SaveVido"
+else:
+    DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
 DOWNLOAD_ROOT = Path(os.getenv("SAVEVIDO_DOWNLOAD_DIR", str(DEFAULT_DOWNLOAD_ROOT))).expanduser()
-DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+try:
+    DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
+except OSError:
+    DOWNLOAD_ROOT = (Path.home() / "Downloads" / "SaveVido").expanduser()
+    DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
 JOBS_ROOT.mkdir(parents=True, exist_ok=True)
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder=str(BASE_DIR / "templates"),
+    static_folder=str(BASE_DIR / "static"),
+)
 app.config["SECRET_KEY"] = os.getenv(
     "SECRET_KEY", "change-this-secret-key"
 )
+
+# Optional, consent-based telemetry. No owner/database secret is shipped in SaveVido.
+TELEMETRY_ENDPOINT = "https://savevido-owner-dashboard.vercel.app/api/track"
+TELEMETRY_ENABLED = False
+TELEMETRY_APP_VERSION = "unknown"
+TELEMETRY_SESSION_ID = None
+
+
+def configure_telemetry(app_version="unknown", enabled=False):
+    """Enable anonymous analytics only after the user opts in at first launch."""
+    global TELEMETRY_ENABLED, TELEMETRY_APP_VERSION, TELEMETRY_SESSION_ID
+    TELEMETRY_ENABLED = bool(enabled)
+    TELEMETRY_APP_VERSION = str(app_version or "unknown")[:32]
+    if not TELEMETRY_ENABLED:
+        return
+    session_file = APP_DATA_DIR / "telemetry-session-id"
+    try:
+        value = session_file.read_text(encoding="utf-8").strip()
+        if not re.fullmatch(r"[a-f0-9]{32}", value):
+            raise ValueError("invalid analytics session id")
+    except Exception:
+        value = uuid.uuid4().hex
+        try:
+            session_file.write_text(value, encoding="utf-8")
+        except OSError:
+            pass
+    TELEMETRY_SESSION_ID = value
+
+
+def send_telemetry(event_type, source_url=None, error=None, file_type=None):
+    """Fire-and-forget; analytics failures must never slow or break a download."""
+    if not TELEMETRY_ENABLED or not TELEMETRY_SESSION_ID:
+        return
+    if event_type not in {"app_open", "app_heartbeat", "download_succeeded", "download_failed"}:
+        return
+    try:
+        source_host = (urlparse(str(source_url)).hostname or "").lower()[:180] if source_url else None
+        message = ""
+        if error:
+            message = re.sub(r"https?://\S+", "[source URL hidden]", str(error), flags=re.I)
+            message = re.sub(r"(?i)(token|password|secret|key)=([^&\s]+)", r"\1=[hidden]", message)
+            message = re.sub(r"\s+", " ", message).strip()[:180]
+        payload = {
+            "event_type": event_type, "platform": "windows",
+            "session_id": TELEMETRY_SESSION_ID, "app_version": TELEMETRY_APP_VERSION,
+            "source_host": source_host, "file_type": str(file_type or "")[:12] or None,
+            "error_code": ("network_error" if error and "network" in message.lower() else "download_error") if error else None,
+            "error_message": message or None,
+        }
+        def deliver():
+            try:
+                requests.post(TELEMETRY_ENDPOINT, json=payload, timeout=(2, 3))
+            except Exception:
+                app.logger.debug("SaveVido telemetry delivery skipped", exc_info=True)
+        threading.Thread(target=deliver, name="SaveVidoTelemetry", daemon=True).start()
+    except Exception:
+        app.logger.debug("SaveVido telemetry preparation skipped", exc_info=True)
+
+
 
 MIN_VALID_FILE_BYTES = 1024
 
@@ -135,61 +215,6 @@ ALLOWED_HOSTS = {
     "baddielatina.com",
     "www.baddielatina.com",
     "files.baddielatina.com",
-
-    # Pornhub
-    "pornhub.com", "www.pornhub.com",
-    "m.pornhub.com",
-    "pornhub.org",
-    "pornhubpremium.com",
-    "phncdn.com",
-    "www.phncdn.com",
-    "ci.phncdn.com",
-    "ei.phncdn.com",
-    "di.phncdn.com",
-    "thumbs.phncdn.com",
-
-    # XNXX
-    "xnxx.com", "www.xnxx.com",
-    "m.xnxx.com",
-    "xnxx.tv",
-    "xnxx.health",
-    "xnxx-cdn.com",
-
-    # Xvideos
-    "xvideos.com", "www.xvideos.com",
-    "xvideos.red",
-    "xvideos-cdn.com",
-
-    # Xhamster
-    "xhamster.com", "www.xhamster.com",
-    "xhamster.desi",
-    "xhcdn.com",
-
-    # XVideos-style media hosting
-    "xv-cdn.com",
-
-    # Stripchat
-    "stripchat.com", "www.stripchat.com",
-    "static.stripchat.com",
-
-    # RedTube
-    "redtube.com", "www.redtube.com",
-
-    # YouPorn
-    "youporn.com", "www.youporn.com",
-
-    # SpankBang
-    "spankbang.com", "www.spankbang.com",
-
-    # Eporner
-    "eporner.com", "www.eporner.com",
-
-    # Tube8
-    "tube8.com", "www.tube8.com",
-
-    # TNAFlix
-    "tnaflix.com", "www.tnaflix.com",
-
     # Image hosting
     "imgur.com", "i.imgur.com",
     "imagebam.com", "imageshack.com",
@@ -210,6 +235,7 @@ ALLOWED_HOSTS = {
 
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
+JOB_LAST_PERSISTED = {}
 
 FFMPEG_PATH = (
     os.getenv("FFMPEG_PATH")
@@ -391,6 +417,19 @@ def send_notification(subject, body):
         )
 
 
+def has_supported_safe_ytdlp_extractor(url):
+    """Let yt-dlp identify the matching extractor, excluding its catch-all generic extractor."""
+    try:
+        from yt_dlp.extractor import gen_extractors
+        return any(
+            getattr(extractor, "IE_NAME", "") != "generic"
+            and extractor.suitable(url)
+            for extractor in gen_extractors()
+        )
+    except Exception:
+        app.logger.debug("yt-dlp extractor detection failed", exc_info=True)
+        return False
+
 
 def clean_url(value):
     value = (value or "").strip()
@@ -405,9 +444,7 @@ def clean_url(value):
     host = (parsed.hostname or "").lower().rstrip(".")
 
     if parsed.scheme.lower() not in {"http", "https"}:
-        raise ValueError(
-            "Please enter a valid HTTP or HTTPS URL."
-        )
+        raise ValueError("Please enter a valid HTTP or HTTPS URL.")
 
     if not host or not parsed.netloc:
         raise ValueError("Please enter a valid video URL.")
@@ -417,6 +454,22 @@ def clean_url(value):
 
     if host in {"localhost", "localhost.localdomain"}:
         raise ValueError("Please enter a public website URL.")
+
+    # Exact domain-boundary matching prevents lookalike hosts such as
+    # youtube.com.example.org from being treated as YouTube.
+    safe_host = any(
+        host == domain or host.endswith("." + domain)
+        for domain in SAFE_YTDLP_SOURCE_HOSTS
+    )
+    if not safe_host:
+        raise ValueError(
+            f"This platform is not enabled in SaveVido: {host}"
+        )
+
+    if not has_supported_safe_ytdlp_extractor(value):
+        raise ValueError(
+            "SaveVido could not find a supported yt-dlp extractor for this URL."
+        )
 
     return value
 
@@ -1142,7 +1195,7 @@ def get_job(job_id):
     return job
 
 
-def update_job(job_id, **values):
+def update_job(job_id, persist=True, **values):
     with DOWNLOAD_JOBS_LOCK:
         job = DOWNLOAD_JOBS.get(job_id)
         if job:
@@ -1150,8 +1203,9 @@ def update_job(job_id, **values):
             snapshot = dict(job)
         else:
             snapshot = None
-    if snapshot:
+    if snapshot and persist:
         save_job_state(snapshot)
+        JOB_LAST_PERSISTED[job_id] = time.monotonic()
 
 
 def cleanup_job_files(job):
@@ -1176,8 +1230,19 @@ def progress_hook(job_id):
                 or 0
             )
             percent = downloaded / total * 100 if total else 0
+            # A resumed yt-dlp transfer can report a fresh fragment counter.
+            # Never let the visible progress move backwards from the saved state.
+            downloaded = max(downloaded, int(job.get("downloaded_bytes") or 0))
+            total = total or int(job.get("total_bytes") or 0)
+            percent = max(
+                float(job.get("percent") or 0),
+                downloaded / total * 100 if total else 0,
+            )
+            now = time.monotonic()
+            persist = now - JOB_LAST_PERSISTED.get(job_id, 0) >= 2.0
             update_job(
                 job_id,
+                persist=persist,
                 status="downloading",
                 downloaded_bytes=downloaded,
                 total_bytes=total,
@@ -1220,6 +1285,24 @@ def find_output_file(temp_dir, mode):
         raise RuntimeError("The source returned an HTML error page.")
 
     return final_path, final_path.stat().st_size
+
+
+def make_saved_filename(title, extension):
+    """Keep the source's real title and add a small SaveVido attribution."""
+    clean_title = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "_", str(title or "video"))
+    clean_title = re.sub(r"\s+", " ", clean_title).strip(" .")[:150].rstrip(" .")
+    if not clean_title:
+        clean_title = "video"
+    if clean_title.upper() in {"CON", "PRN", "AUX", "NUL"} or re.fullmatch(r"(COM|LPT)[1-9]", clean_title.upper()):
+        clean_title = "_" + clean_title
+
+    attribution = " (Downloaded from SaveVido)"
+    candidate = DOWNLOAD_ROOT / f"{clean_title}{attribution}{extension}"
+    number = 2
+    while candidate.exists():
+        candidate = DOWNLOAD_ROOT / f"{clean_title} ({number}){attribution}{extension}"
+        number += 1
+    return candidate
 
 
 def run_download_job(job_id):
@@ -1274,10 +1357,18 @@ def run_download_job(job_id):
 
         update_job(job_id, status="downloading")
         with yt_dlp.YoutubeDL(options) as ydl:
-            downloaded_info = ydl.extract_info(url, download=True)
+            # Reuse the metadata already fetched above instead of asking the
+            # source for the same page a second time (often a costly request).
+            downloaded_info = ydl.process_ie_result(info, download=True)
 
         final_path, final_size = find_output_file(temp_dir, mode)
         title = downloaded_info.get("title") or title
+        # Move the finished media out of the hidden job workspace into the
+        # single SaveVido download folder, using the original media title.
+        destination = make_saved_filename(title, final_path.suffix.lower())
+        shutil.move(str(final_path), str(destination))
+        final_path = destination
+        final_size = final_path.stat().st_size
         platform = platform_for(url)
 
         with get_db() as connection:
@@ -1309,6 +1400,7 @@ def run_download_job(job_id):
             file_type=file_type,
             file_size=final_size,
         )
+        send_telemetry("download_succeeded", source_url=url, file_type=file_type)
 
     except Exception as error:
         if find_stop_signal(error):
@@ -1330,6 +1422,8 @@ def run_download_job(job_id):
             return
 
         app.logger.exception("Download job failed")
+        current_job = get_job(job_id) or {}
+        send_telemetry("download_failed", source_url=url, error=humanize_error(error), file_type=current_job.get("file_type"))
         if is_network_error(error):
             update_job(
                 job_id,
@@ -1344,6 +1438,28 @@ def run_download_job(job_id):
                 error=humanize_error(error),
                 speed=0,
             )
+
+
+@app.route("/api/location-consent", methods=["GET", "POST"])
+def location_consent():
+    """Persist the one-time location choice locally for this Windows installation."""
+    consent_file = APP_DATA_DIR / "location-consent.json"
+    if request.method == "GET":
+        try:
+            value = json.loads(consent_file.read_text(encoding="utf-8"))
+            decision = value.get("decision") if isinstance(value, dict) else None
+        except (OSError, ValueError, TypeError):
+            decision = None
+        return jsonify({"decision": decision if decision in ("allowed", "denied") else None})
+    payload = request.get_json(silent=True) or {}
+    decision = str(payload.get("decision") or "").strip().lower()
+    if decision not in ("allowed", "denied"):
+        return jsonify({"error": "Invalid location consent choice."}), 400
+    try:
+        consent_file.write_text(json.dumps({"decision": decision, "updated_at": now_iso()}), encoding="utf-8")
+    except OSError:
+        return jsonify({"error": "Could not save this setting on your device."}), 500
+    return jsonify({"ok": True, "decision": decision})
 
 
 @app.get("/share")
@@ -1364,7 +1480,53 @@ def index():
             "INSERT INTO visits(created_at) VALUES (?)",
             (now_iso(),),
         )
+    # On Vercel, serve the official platform page with the app preview and
+    # platform download cards. Keep the real downloader UI for the local app.
+    if os.getenv("VERCEL") == "1":
+        return send_from_directory(
+            BASE_DIR / "platform",
+            "index.html",
+            max_age=0,
+        )
     return render_template("index.html")
+
+
+@app.get("/release-config.json")
+def release_config():
+    # Read the manifest from the GitHub branch at request time. This means the
+    # already-deployed website sees each successfully published release without
+    # waiting for a separate Vercel deployment.
+    manifest_url = (
+        "https://raw.githubusercontent.com/"
+        "AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/"
+        "savevido-central-platform/platform/release-config.json"
+    )
+    try:
+        manifest_response = requests.get(manifest_url, timeout=8)
+        manifest_response.raise_for_status()
+        manifest_data = manifest_response.json()
+        if not isinstance(manifest_data, dict):
+            raise ValueError("Release manifest must be a JSON object.")
+        response = jsonify(manifest_data)
+    except Exception:
+        # Keep the last bundled manifest available if GitHub is temporarily down.
+        response = send_from_directory(
+            BASE_DIR / "platform",
+            "release-config.json",
+            mimetype="application/json",
+            max_age=0,
+        )
+    response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return response
+
+
+@app.get("/platform/<path:filename>")
+def platform_asset(filename):
+    return send_from_directory(
+        BASE_DIR / "platform",
+        filename,
+        max_age=0,
+    )
 
 
 @app.route("/privacy")
@@ -1739,6 +1901,7 @@ def download_status(job_id):
             "platform": job.get("platform"),
             "quality": job.get("quality"),
             "file_type": job.get("file_type"),
+            "mode": job.get("mode"),
         },
     })
 
@@ -1753,7 +1916,7 @@ def pause_download(job_id):
             "error": "Download job not found.",
         }), 404
 
-    if job["status"] != "downloading":
+    if job["status"] not in {"starting", "preparing", "downloading", "processing"}:
         return jsonify({
             "ok": False,
             "error": "Download is not currently running.",
@@ -1806,7 +1969,17 @@ def cancel_download(job_id):
             "error": "Download job not found.",
         }), 404
 
-    update_job(job_id, cancel_requested=True)
+    if job.get("status") in {"paused", "network_error"}:
+        update_job(
+            job_id,
+            status="cancelled",
+            cancel_requested=False,
+            pause_requested=False,
+            speed=0,
+        )
+        cleanup_job_files(job)
+    else:
+        update_job(job_id, cancel_requested=True)
     return jsonify({"ok": True})
 
 

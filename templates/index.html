@@ -427,42 +427,19 @@
       </p>
 
       <ul>
-        <li>The name of the website you are downloading from.</li>
+        <li>The name of the app or platform you are downloading from.</li>
         <li>The error message or a description of the problem.</li>
         <li>The video URL, if possible.</li>
       </ul>
 
       <p class="support-thanks">
-        We will review your report and consider adding support for
-        the website manually. Thank you for helping us improve SaveVido.
+        If the issue continues, send a report with the Feedback button.
+        Your report is saved privately for troubleshooting.
       </p>
-
       <div class="support-contact">
-
-        <a
-          class="support-contact-link whatsapp-link"
-          href="https://wa.me/923495579682?text=Hello%20SaveVido%20Support%2C%20I%20am%20experiencing%20a%20download%20issue.%0AWebsite%3A%20%0AError%3A%20%0AVideo%20URL%3A%20"
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label="Contact SaveVido on WhatsApp"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="M12.04 2a9.87 9.87 0 0 0-8.47 14.94L2 22l5.21-1.52A9.93 9.93 0 1 0 12.04 2Zm0 18.12a8.17 8.17 0 0 1-4.16-1.14l-.3-.18-3.09.9.92-3.01-.2-.31a8.17 8.17 0 1 1 6.83 3.74Zm4.48-6.12c-.25-.13-1.47-.72-1.7-.8-.23-.09-.4-.13-.57.13-.17.25-.65.8-.8.96-.15.17-.3.19-.55.06-.25-.13-1.06-.39-2.02-1.24-.75-.67-1.25-1.5-1.4-1.75-.15-.25-.02-.39.11-.52.12-.11.25-.3.38-.44.13-.15.17-.25.25-.42.09-.17.05-.32-.02-.45-.06-.13-.57-1.37-.78-1.87-.2-.49-.41-.42-.57-.43h-.49c-.17 0-.45.06-.68.32-.23.25-.89.87-.89 2.12s.91 2.46 1.04 2.63c.13.17 1.79 2.73 4.33 3.83.61.26 1.09.42 1.47.54.62.2 1.18.17 1.63.1.5-.08 1.47-.6 1.68-1.19.21-.58.21-1.08.15-1.19-.07-.1-.24-.17-.49-.3Z"/>
-          </svg>
-          WhatsApp Support · +92 349 5579682
-        </a>
-
-        <a
-          class="support-contact-link email-link"
-          href="mailto:azankokarai1122@gmail.com?subject=SaveVido%20Download%20Issue&body=Hello%20SaveVido%20Support%2C%0A%0AWebsite%3A%20%0AError%3A%20%0AVideo%20URL%3A%20%0A%0ADescription%3A%20"
-          aria-label="Email SaveVido support"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <path fill="currentColor" d="M3 5h18a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2Zm9 7.1L20.3 7H3.7l8.3 5.1Zm0 2.3L3 8.8V17h18V8.8l-9 5.6Z"/>
-          </svg>
-          Email Support
-        </a>
-
+        <button class="support-contact-link" id="supportFeedbackBtn" type="button" aria-label="Open SaveVido feedback form">
+          Send feedback ↗
+        </button>
       </div>
 
     </div>
@@ -1238,47 +1215,21 @@
 
 
       <form id="commentForm">
+        <label for="name">YOUR NAME</label>
+        <input id="name" required minlength="2" maxlength="80" autocomplete="name" placeholder="How should we call you?">
 
-        <label for="name">
-          YOUR NAME
-        </label>
+        <label for="feedbackEmail">EMAIL OR WHATSAPP (AT LEAST ONE)</label>
+        <input id="feedbackEmail" type="email" maxlength="254" autocomplete="email" placeholder="Email address (optional)">
+        <input id="feedbackWhatsapp" type="tel" maxlength="24" autocomplete="tel" placeholder="WhatsApp, e.g. +923001234567">
 
-        <input
-          id="name"
-          required
-          maxlength="80"
-          placeholder="How should we call you?"
-        >
+        <label for="comment">YOUR MESSAGE</label>
+        <textarea id="comment" required minlength="3" maxlength="4000" rows="5" placeholder="Tell us what happened or suggest an improvement"></textarea>
 
+<input type="text" id="feedbackWebsite" name="website" tabindex="-1" autocomplete="off" aria-hidden="true" style="position:absolute;left:-10000px;width:1px;height:1px">
+        <p class="feedback-privacy-note">Your name, message and one contact method are required. On the first desktop-app launch only, SaveVido asks whether you want to share your location. It is optional and never collected in the background.</p>
 
-        <label for="comment">
-          YOUR NOTE
-        </label>
-
-        <textarea
-          id="comment"
-          required
-          maxlength="1000"
-          rows="4"
-          placeholder="Suggest an improvement or report an issue"
-        ></textarea>
-
-
-        <button
-          class="solid-btn"
-          type="submit"
-        >
-          Send feedback <span>↗</span>
-        </button>
-
-
-        <div
-          id="commentStatus"
-          class="status"
-          role="status"
-          aria-live="polite"
-        ></div>
-
+        <button class="solid-btn" type="submit">Send feedback <span>↗</span></button>
+        <div id="commentStatus" class="status" role="status" aria-live="polite"></div>
       </form>
 
     </section>
@@ -1455,6 +1406,9 @@
 
 
 
+
+  <section id="locationConsentPrompt" role="dialog" aria-modal="true" aria-labelledby="locationConsentTitle" hidden><div class="location-consent-card"><p class="eyebrow">OPTIONAL · ONE TIME</p><h2 id="locationConsentTitle">Allow your location?</h2><p>Sharing your approximate current location can help troubleshoot a problem. It is optional and is attached only if you later submit feedback.</p><button id="locationAllowBtn" type="button" class="solid-btn">Allow</button> <button id="locationDenyBtn" type="button">Deny</button> <button id="locationTurnOnBtn" type="button" hidden>Turn on location</button><p id="locationConsentStatus" role="status"></p></div></section>
+
   <!-- MAIN JAVASCRIPT -->
 
   <aside id="historyDrawer" class="history-drawer" aria-label="Download history" aria-hidden="true">
@@ -1472,8 +1426,9 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261115-7"
+    src="{{ url_for('static', filename='script.js') }}?v=20261120-location-persistent-3"
   ></script>
+  <script src="{{ url_for('static', filename='update.js') }}?v=1" defer></script>
 
 
 
@@ -1583,5 +1538,5 @@
 
 
 
-</body>
+<script src="{{ url_for('static', filename='update.js') }}" defer></script>\n</body>
 </html>

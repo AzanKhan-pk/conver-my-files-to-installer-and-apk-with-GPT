@@ -1,4 +1,4 @@
-const CACHE_NAME = "SaveVido-v3";
+const CACHE_NAME = "SaveVido-v4";
 
 const STATIC_FILES = [
   "/"

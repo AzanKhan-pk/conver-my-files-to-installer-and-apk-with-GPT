@@ -1,0 +1,428 @@
+name: Build SaveVido Windows installer
+# Rebuild with the latest progress, resume, and desktop rendering fixes.
+# Rebuild the installer from the complete download-resume fixes.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - savevido-central-platform
+      - feature/privacy-location-consent
+    paths:
+      - "app.py"
+      - "desktop_launcher.py"
+      - "updater.py"
+      - "requirements-windows.txt"
+      - "templates/**"
+      - "static/**"
+      - "installer/**"
+      - "platform/**"
+      - "!platform/release-config.json"
+      - ".github/workflows/build-windows-installer.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: savevido-windows-${{ github.ref }}
+  # Only the latest source commit for this branch should publish a release.
+  cancel-in-progress: true
+
+jobs:
+  windows-installer:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+        # Use the automatic workflow token for checkout; a PAT is optional and only used for release publishing.
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements-windows.txt
+
+      - name: Validate JavaScript and Python source
+        shell: pwsh
+        run: |
+          node --check static/script.js
+          if ($LASTEXITCODE -ne 0) { throw "static/script.js syntax check failed." }
+          node --check static/update.js
+          if ($LASTEXITCODE -ne 0) { throw "static/update.js syntax check failed." }
+          node --check platform/api/feedback.js
+          if ($LASTEXITCODE -ne 0) { throw "platform/api/feedback.js syntax check failed." }
+          node --check platform/api/metrics.js
+          if ($LASTEXITCODE -ne 0) { throw "platform/api/metrics.js syntax check failed." }
+          node --check platform/owner.js
+          if ($LASTEXITCODE -ne 0) { throw "platform/owner.js syntax check failed." }
+          python -m py_compile app.py desktop_launcher.py updater.py
+          if ($LASTEXITCODE -ne 0) { throw "Python source compile check failed." }
+
+      - name: Verify Qt WebEngine imports
+        shell: pwsh
+        run: |
+          python -c "from PySide6.QtWebEngineWidgets import QWebEngineView; from PySide6.QtWebEngineCore import QWebEngineProfile; print('Qt WebEngine import check passed')"
+
+      - name: Generate Windows application icon
+        shell: pwsh
+        run: |
+          python -m pip install Pillow
+          python -c "from PIL import Image; im=Image.open('static/icon-512.png').convert('RGBA'); im.save('static/savevido.ico',format='ICO',sizes=[(16,16),(24,24),(32,32),(48,48),(64,64),(128,128),(256,256)])"
+
+      - name: Build SaveVido desktop application
+        shell: pwsh
+        run: |
+          $version = "1.0.$env:GITHUB_RUN_NUMBER"
+          @{ version = $version } | ConvertTo-Json | Set-Content -Path "build_info.json" -Encoding utf8
+          python -m PyInstaller --noconfirm --clean --onedir --windowed --name SaveVido --icon "static/savevido.ico" --add-data "templates;templates" --add-data "static;static" --add-data "build_info.json;." --hidden-import PySide6.QtWebEngineWidgets --hidden-import PySide6.QtWebEngineCore --exclude-module tkinter --exclude-module _tkinter --exclude-module test --exclude-module unittest --exclude-module pydoc --collect-all yt_dlp --collect-all gallery_dl --collect-all flask --collect-all werkzeug --collect-all shiboken6 desktop_launcher.py
+          if ($LASTEXITCODE -ne 0) { throw "PyInstaller build failed with exit code $LASTEXITCODE." }
+          $webEngineModule = Get-ChildItem "dist\SaveVido" -Filter "QtWebEngineWidgets*.pyd" -Recurse | Select-Object -First 1
+          if (-not $webEngineModule) { throw "PySide6.QtWebEngineWidgets was not bundled. Refusing to create a broken installer." }
+          Write-Host "Qt WebEngine Widgets module bundled: $($webEngineModule.FullName)"
+          Copy-Item "build_info.json" "dist\\SaveVido\\build_info.json" -Force
+
+      - name: Build standalone incremental updater
+        shell: pwsh
+        run: |
+          python -m PyInstaller --noconfirm --clean --onefile --windowed --name SaveVidoUpdater updater.py
+          if ($LASTEXITCODE -ne 0) { throw "SaveVido updater build failed." }
+          Copy-Item "dist\\SaveVidoUpdater.exe" "dist\\SaveVido\\SaveVidoUpdater.exe" -Force
+          if (-not (Test-Path "dist\\SaveVido\\SaveVidoUpdater.exe")) { throw "Updater executable is missing." }
+
+
+      - name: Remove unused Qt QML payload before packaging
+        shell: pwsh
+        run: |
+          $qmlDir = Join-Path $env:GITHUB_WORKSPACE "dist\\SaveVido\\_internal\\PySide6\\qml"
+          if (Test-Path -LiteralPath $qmlDir) {
+            Write-Host "Removing optional Qt QML modules not used by the Qt WebEngine Widgets desktop UI: $qmlDir"
+            Remove-Item -LiteralPath $qmlDir -Recurse -Force
+          }
+          if (Test-Path -LiteralPath $qmlDir) { throw "Unused Qt QML payload could not be removed: $qmlDir" }
+
+      - name: Bundle FFmpeg
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          $workspace = $env:GITHUB_WORKSPACE
+          $archive = Join-Path $env:RUNNER_TEMP "savevido-ffmpeg.zip"
+          $extractRoot = Join-Path $env:RUNNER_TEMP "savevido-ffmpeg-extracted"
+          $appRoot = Join-Path $workspace "dist\SaveVido"
+          $ffmpegDir = Join-Path $appRoot "ffmpeg"
+
+          if (-not (Test-Path -LiteralPath $appRoot -PathType Container)) {
+            throw "PyInstaller application folder is missing: $appRoot"
+          }
+
+          # Gyan.dev is the preferred essentials build. Retry temporary 503/network
+          # failures, then fall back to a static Windows build hosted on GitHub Releases.
+          $downloaded = $false
+          $sources = @(
+            "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
+            "https://github.com/BtbN/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+          )
+          foreach ($source in $sources) {
+            for ($attempt = 1; $attempt -le 4; $attempt++) {
+              try {
+                if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+                Write-Host "Downloading FFmpeg (attempt $attempt/4): $source"
+                Invoke-WebRequest -Uri $source -OutFile $archive -TimeoutSec 240
+                $archiveInfo = Get-Item -LiteralPath $archive -ErrorAction Stop
+                if ($archiveInfo.Length -lt 1000000) {
+                  throw "Downloaded FFmpeg archive is unexpectedly small ($($archiveInfo.Length) bytes)."
+                }
+                $downloaded = $true
+                break
+              }
+              catch {
+                Write-Warning "FFmpeg download failed: $($_.Exception.Message)"
+                if (Test-Path -LiteralPath $archive) { Remove-Item -LiteralPath $archive -Force }
+                if ($attempt -lt 4) {
+                  $delay = 10 * $attempt
+                  Write-Host "Retrying FFmpeg download in $delay seconds..."
+                  Start-Sleep -Seconds $delay
+                }
+              }
+            }
+            if ($downloaded) { break }
+            Write-Warning "This FFmpeg source is unavailable; trying the next source."
+          }
+          if (-not $downloaded) {
+            throw "FFmpeg download failed from both Gyan.dev and the GitHub Releases fallback after retries."
+          }
+          if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) {
+            throw "FFmpeg archive download did not create: $archive"
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $extractRoot -Force
+
+          $ffmpeg = Get-ChildItem -LiteralPath $extractRoot -Filter "ffmpeg.exe" -File -Recurse | Select-Object -First 1
+          $ffprobe = Get-ChildItem -LiteralPath $extractRoot -Filter "ffprobe.exe" -File -Recurse | Select-Object -First 1
+          if (-not $ffmpeg -or -not $ffprobe) {
+            throw "FFmpeg binaries were not found in the downloaded archive. Extracted to: $extractRoot"
+          }
+
+          New-Item -ItemType Directory -Path $ffmpegDir -Force | Out-Null
+          Copy-Item -LiteralPath $ffmpeg.FullName -Destination (Join-Path $ffmpegDir "ffmpeg.exe") -Force
+          Copy-Item -LiteralPath $ffprobe.FullName -Destination (Join-Path $ffmpegDir "ffprobe.exe") -Force
+
+          foreach ($binary in @("ffmpeg.exe", "ffprobe.exe")) {
+            $target = Join-Path $ffmpegDir $binary
+            if (-not (Test-Path -LiteralPath $target -PathType Leaf)) {
+              throw "FFmpeg bundle copy failed; required file is missing: $target"
+            }
+            if ((Get-Item -LiteralPath $target).Length -le 0) {
+              throw "FFmpeg bundle copy produced an empty file: $target"
+            }
+          }
+          Write-Host "Verified FFmpeg bundle directory: $ffmpegDir"
+          Get-ChildItem -LiteralPath $ffmpegDir -File | ForEach-Object {
+            Write-Host ("{0:N1} MB | {1}" -f ($_.Length / 1MB), $_.Name)
+          }
+
+      - name: Report packaged component sizes
+        shell: pwsh
+        run: |
+          $root = "dist\SaveVido"
+          $total = (Get-ChildItem $root -File -Recurse | Measure-Object -Property Length -Sum).Sum
+          Write-Host ("Total unpacked app size: {0:N1} MB" -f ($total / 1MB))
+          Get-ChildItem $root -Directory | ForEach-Object {
+            $bytes = (Get-ChildItem $_.FullName -File -Recurse | Measure-Object -Property Length -Sum).Sum
+            Write-Host ("{0}: {1:N1} MB" -f $_.Name, ($bytes / 1MB))
+            if ($_.Name -eq "_internal") {
+              Get-ChildItem $_.FullName -Directory | ForEach-Object {
+                $childBytes = (Get-ChildItem $_.FullName -File -Recurse | Measure-Object -Property Length -Sum).Sum
+                Write-Host ("  _internal/{0}: {1:N1} MB" -f $_.Name, ($childBytes / 1MB))
+              }
+            }
+          }
+          Write-Host "Largest bundled files:"
+          Get-ChildItem $root -File -Recurse | Sort-Object Length -Descending | Select-Object -First 25 | ForEach-Object {
+            Write-Host ("{0:N1} MB | {1}" -f ($_.Length / 1MB), $_.FullName)
+          }
+          Write-Host "Bundled FFmpeg sizes:"
+          if (Test-Path "$root\ffmpeg") {
+            Get-ChildItem "$root\ffmpeg" -File | ForEach-Object {
+              Write-Host ("{0:N1} MB | {1}" -f ($_.Length / 1MB), $_.Name)
+            }
+          } else {
+            throw "FFmpeg folder is missing after the bundle step."
+          }
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup --no-progress -y
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) {
+            if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 7\ISCC.exe")) {
+              throw "Inno Setup compiler was not installed."
+            }
+          }
+
+      - name: Prepare branded installer artwork
+        shell: pwsh
+        run: |
+          python -m pip install Pillow
+          python -c "from PIL import Image; im=Image.open('static/icon-512.png').convert('RGB'); im.resize((55,55), Image.Resampling.LANCZOS).save('installer/savevido-installer-logo.bmp')"
+
+      - name: Compile installer
+        shell: pwsh
+        run: |
+          $root = $env:GITHUB_WORKSPACE
+          $releaseDir = Join-Path $root "release"
+          $distDir = Join-Path $root "dist\SaveVido"
+          $issDir = Join-Path $root "installer"
+          $issFile = Join-Path $issDir "SaveVido.iss"
+          $iconFile = Join-Path $root "static\savevido.ico"
+          $wizardImage = Join-Path $issDir "savevido-installer-logo.bmp"
+          $appExe = Join-Path $distDir "SaveVido.exe"
+
+          New-Item -ItemType Directory -Force $releaseDir | Out-Null
+          foreach ($required in @($distDir, $issFile, $iconFile, $wizardImage, $appExe)) {
+            if (-not (Test-Path -LiteralPath $required)) {
+              throw "Required installer input is missing: $required"
+            }
+          }
+          if (-not (Get-ChildItem -LiteralPath $distDir -Force)) {
+            throw "PyInstaller output folder is empty: $distDir"
+          }
+
+          $compiler = @(
+            "C:\Program Files (x86)\Inno Setup 6\ISCC.exe",
+            "C:\Program Files (x86)\Inno Setup 7\ISCC.exe",
+            "C:\Program Files\Inno Setup 6\ISCC.exe",
+            "C:\Program Files\Inno Setup 7\ISCC.exe"
+          ) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+          if (-not $compiler) { throw "ISCC.exe not found in the standard Inno Setup locations." }
+
+          $version = "1.0.$env:GITHUB_RUN_NUMBER"
+          Write-Host "Repository root: $root"
+          Write-Host "Compiler: $compiler"
+          Write-Host "Script: $issFile"
+          Write-Host "Output: $(Join-Path $releaseDir 'SaveVido-Setup.exe')"
+          Push-Location $issDir
+          try {
+            & $compiler "/DAppVersion=$version" "SaveVido.iss"
+            if ($LASTEXITCODE -ne 0) { throw "Inno Setup compilation failed with exit code $LASTEXITCODE." }
+          }
+          finally {
+            Pop-Location
+          }
+
+          $installer = Join-Path $releaseDir "SaveVido-Setup.exe"
+          if (-not (Test-Path -LiteralPath $installer)) { throw "Installer output was not created: $installer" }
+          $size = (Get-Item -LiteralPath $installer).Length
+          if ($size -lt 1000000) { throw "Installer output is unexpectedly small ($size bytes)." }
+          Write-Host ("Installer compiled successfully: {0} ({1:N1} MB)" -f $installer, ($size / 1MB))
+
+      - name: Prepare changed-files update package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          $version = "1.0.$env:GITHUB_RUN_NUMBER"
+          $tag = "v$version"
+          $root = (Resolve-Path "dist\\SaveVido").Path
+          $releaseDir = Join-Path $env:GITHUB_WORKSPACE "release"
+          $manifestPath = Join-Path $releaseDir "SaveVido-Update-Manifest.json"
+          $zipPath = Join-Path $releaseDir "SaveVido-Update.zip"
+          $current = @{}
+          Get-ChildItem $root -File -Recurse | ForEach-Object {
+            $relative = $_.FullName.Substring($root.Length + 1).Replace([char]92,[char]47)
+            $current[$relative] = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+          }
+          $previous = $null
+          # Check assets before downloading: legacy releases do not have updater manifests.
+          $priorErrorAction = $ErrorActionPreference
+          $ErrorActionPreference = "Continue"
+          $previousTag = gh release list --repo "$env:GITHUB_REPOSITORY" --limit 1 --json tagName --jq '.[0].tagName'
+          $listExit = $LASTEXITCODE
+          if ($listExit -eq 0 -and $previousTag) {
+            $assetNames = @(gh release view $previousTag --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name')
+            $viewExit = $LASTEXITCODE
+            if ($viewExit -eq 0 -and ($assetNames -contains "SaveVido-Update-Manifest.json")) {
+              $previousDir = Join-Path $env:RUNNER_TEMP "savevido-previous"
+              New-Item -ItemType Directory -Force $previousDir | Out-Null
+              gh release download $previousTag --repo "$env:GITHUB_REPOSITORY" --pattern "SaveVido-Update-Manifest.json" --dir $previousDir
+              if ($LASTEXITCODE -eq 0 -and (Test-Path (Join-Path $previousDir "SaveVido-Update-Manifest.json"))) {
+                $previous = Get-Content (Join-Path $previousDir "SaveVido-Update-Manifest.json") -Raw | ConvertFrom-Json
+              }
+            } else {
+              Write-Host "Previous release has no updater manifest; treating this as the bootstrap release."
+            }
+          }
+          $ErrorActionPreference = $priorErrorAction
+          $changed = @()
+          $deleted = @()
+          if ($previous -and $previous.files) {
+            $old = @{}
+            foreach ($entry in $previous.files) { $old[$entry.path] = $entry.sha256 }
+            $changed = @($current.Keys | Where-Object { -not $old.ContainsKey($_) -or $old[$_] -ne $current[$_] })
+            $deleted = @($old.Keys | Where-Object { -not $current.ContainsKey($_) })
+            $stage = Join-Path $env:RUNNER_TEMP "savevido-delta-stage"
+            if (Test-Path $stage) { Remove-Item $stage -Recurse -Force }
+            New-Item -ItemType Directory -Force $stage | Out-Null
+            foreach ($relative in $changed) {
+              $source = Join-Path $root ($relative.Replace([char]47,[char]92))
+              $target = Join-Path $stage ($relative.Replace([char]47,[char]92))
+              New-Item -ItemType Directory -Force (Split-Path $target) | Out-Null
+              Copy-Item $source $target -Force
+            }
+            if ($changed.Count -eq 0) {
+              $relative = "build_info.json"
+              $source = Join-Path $root $relative
+              if (-not (Test-Path -LiteralPath $source -PathType Leaf)) {
+                throw "No files changed and build_info.json is missing; cannot create a valid update package."
+              }
+              $target = Join-Path $stage $relative
+              Copy-Item -LiteralPath $source -Destination $target -Force
+              $changed = @($relative)
+            }
+                      Compress-Archive -Path (Join-Path $stage "*") -DestinationPath $zipPath -CompressionLevel Optimal -Force
+            $patchHash = (Get-FileHash $zipPath -Algorithm SHA256).Hash.ToLower()
+            $patchUrl = "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag/SaveVido-Update.zip"
+          } else {
+            Write-Host "Creating baseline manifest for this bootstrap release; the next release can publish a delta."
+            $patchHash = ""
+            $patchUrl = ""
+          }
+          $fileEntries = @($current.Keys | Sort-Object | ForEach-Object { [ordered]@{ path = $_; sha256 = $current[$_] } })
+          $baseVersion = if ($previous -and $previous.version) { [string]$previous.version } else { "" }
+          $manifest = [ordered]@{
+            version = $version
+            base_version = $baseVersion
+            patch_url = $patchUrl
+            patch_sha256 = $patchHash
+            files = $fileEntries
+            patch_files = @($changed)
+            delete = @($deleted)
+          }
+          $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -Encoding utf8
+          Write-Host "Update manifest created: $($fileEntries.Count) tracked files; $($changed.Count) changed files."
+      - name: Publish versioned GitHub Release and refresh website manifest
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $version = "1.0.$env:GITHUB_RUN_NUMBER"
+          $tag = "v$version"
+          $assets = @("release/SaveVido-Setup.exe", "release/SaveVido-Update-Manifest.json")
+          if (Test-Path "release/SaveVido-Update.zip") { $assets += "release/SaveVido-Update.zip" }
+          gh release create $tag @assets --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "SaveVido $version" --notes "SaveVido Windows installer and, when available, a verified changed-files updater. Requires Windows 10 or Windows 11."
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed." }
+
+          $sha256 = (Get-FileHash "release/SaveVido-Setup.exe" -Algorithm SHA256).Hash.ToLower()
+          python -c "import json,sys,os; from datetime import datetime,timezone; p='platform/release-config.json'; d=json.load(open(p,encoding='utf-8')); v=sys.argv[1]; h=sys.argv[2]; d['current_version']=v; d['updated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'); d['update_service']['status']='Latest Windows release published automatically from GitHub commits.'; w=d['channels']['windows']; w['version']=v; w['status']='Available: latest verified Windows installer.'; w['download_url']='https://github.com/'+os.getenv('GITHUB_REPOSITORY','AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT')+'/releases/download/v'+v+'/SaveVido-Setup.exe'; w['sha256']=h; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2); print('Website manifest updated:',v)" $version $sha256
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add platform/release-config.json
+          git commit -m "chore: publish SaveVido $version release manifest"
+
+          # Publish only the manifest change on top of the newest branch tip.
+          # If another workflow updates the branch at the same time, retry from
+          # that new tip and reapply this release's version/hash. Never force-push.
+          $published = $false
+          for ($attempt = 1; $attempt -le 5; $attempt++) {
+            Write-Host "Manifest publish attempt $attempt/5"
+            git fetch origin "$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -ne 0) { throw "Could not fetch latest branch state." }
+
+            git reset --hard "origin/$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -ne 0) { throw "Could not reset to latest remote branch state." }
+
+            python -c "import json,sys,os; from datetime import datetime,timezone; p='platform/release-config.json'; d=json.load(open(p,encoding='utf-8')); v=sys.argv[1]; h=sys.argv[2]; d['current_version']=v; d['updated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'); d['update_service']['status']='Latest Windows release published automatically from GitHub commits.'; w=d['channels']['windows']; w['version']=v; w['status']='Available: latest verified Windows installer.'; w['download_url']='https://github.com/'+os.getenv('GITHUB_REPOSITORY','AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT')+'/releases/download/v'+v+'/SaveVido-Setup.exe'; w['sha256']=h; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2); print('Website manifest updated:',v)" $version $sha256
+            if ($LASTEXITCODE -ne 0) { throw "Could not regenerate website release manifest." }
+
+            git add platform/release-config.json
+            git diff --cached --quiet
+            if ($LASTEXITCODE -eq 0) {
+              Write-Host "Remote manifest already contains this release version."
+              $published = $true
+              break
+            }
+
+            git commit -m "chore: publish SaveVido $version release manifest"
+            if ($LASTEXITCODE -ne 0) { throw "Could not commit website release manifest." }
+
+            git push origin "HEAD:$env:GITHUB_REF_NAME"
+            if ($LASTEXITCODE -eq 0) {
+              $published = $true
+              break
+            }
+
+            Write-Warning "Branch changed during manifest publish; retrying from latest remote state."
+            Start-Sleep -Seconds (3 * $attempt)
+          }
+
+          if (-not $published) {
+            throw "Could not publish release manifest after 5 safe retries; no force-push was used."
+          }
