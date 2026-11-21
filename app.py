@@ -185,6 +185,7 @@ def find_enabled_ytdlp_extractor(url):
 def validate_public_host(host):
     """Reject localhost, private, loopback, link-local and non-public IP targets."""
     host = (host or "").strip().lower().rstrip(".")
+
     if not host or host in {"localhost", "localhost.localdomain"}:
         raise ValueError("Please enter a public website URL.")
 
@@ -195,10 +196,12 @@ def validate_public_host(host):
 
     if ip is not None:
         if not ip.is_global:
-            raise ValueError("Private or local network addresses are not allowed.")
+            raise ValueError(
+                "Private or local network addresses are not allowed."
+            )
         return
 
-        try:
+    try:
         records = socket.getaddrinfo(
             host, None, type=socket.SOCK_STREAM
         )
@@ -209,13 +212,16 @@ def validate_public_host(host):
 
     for record in records:
         address = record[4][0].split("%", 1)[0]
+
         try:
             resolved_ip = ipaddress.ip_address(address)
         except ValueError:
             continue
-        if not resolved_ip.is_global:
-            raise ValueError("This website resolves to a private or local network address.")
 
+        if not resolved_ip.is_global:
+            raise ValueError(
+                "This website resolves to a private or local network address."
+            )
 
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
