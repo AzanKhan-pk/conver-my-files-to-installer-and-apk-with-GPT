@@ -415,19 +415,6 @@ def clean_url(value):
     if parsed.username is not None or parsed.password is not None:
         raise ValueError("Invalid video URL.")
 
-    # Existing supported domains
-    allowed_bare = {
-        domain.lower().rstrip(".").removeprefix("www.")
-        for domain in ALLOWED_HOSTS
-    }
-
-    bare_host = host.removeprefix("www.")
-
-    if bare_host not in allowed_bare:
-        raise ValueError(
-            f"This platform is not currently supported: {host}"
-        )
-
     if host in {"localhost", "localhost.localdomain"}:
         raise ValueError("Please enter a public website URL.")
 
