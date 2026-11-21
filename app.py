@@ -416,26 +416,6 @@ def send_notification(subject, body):
         )
 
 
-
-# Only mainstream, non-adult source platforms are accepted as input URLs.
-# yt-dlp still chooses the exact extractor automatically for each supported URL.
-SAFE_YTDLP_SOURCE_HOSTS = {
-    "youtube.com", "youtube-nocookie.com", "youtu.be",
-    "tiktok.com",
-    "instagram.com",
-    "facebook.com", "fb.com", "fb.watch",
-    "x.com", "twitter.com",
-    "reddit.com", "redd.it",
-    "vimeo.com",
-    "dailymotion.com", "dai.ly",
-    "twitch.tv",
-    "soundcloud.com", "snd.sc",
-    "bilibili.com", "b23.tv",
-    "pinterest.com", "pin.it",
-    "imgur.com",
-}
-
-
 def has_supported_safe_ytdlp_extractor(url):
     """Let yt-dlp identify the matching extractor, excluding its catch-all generic extractor."""
     try:
