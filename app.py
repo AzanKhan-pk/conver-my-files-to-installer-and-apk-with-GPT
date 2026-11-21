@@ -417,6 +417,39 @@ def send_notification(subject, body):
 
 
 
+# Only mainstream, non-adult source platforms are accepted as input URLs.
+# yt-dlp still chooses the exact extractor automatically for each supported URL.
+SAFE_YTDLP_SOURCE_HOSTS = {
+    "youtube.com", "youtube-nocookie.com", "youtu.be",
+    "tiktok.com",
+    "instagram.com",
+    "facebook.com", "fb.com", "fb.watch",
+    "x.com", "twitter.com",
+    "reddit.com", "redd.it",
+    "vimeo.com",
+    "dailymotion.com", "dai.ly",
+    "twitch.tv",
+    "soundcloud.com", "snd.sc",
+    "bilibili.com", "b23.tv",
+    "pinterest.com", "pin.it",
+    "imgur.com",
+}
+
+
+def has_supported_safe_ytdlp_extractor(url):
+    """Let yt-dlp identify the matching extractor, excluding its catch-all generic extractor."""
+    try:
+        from yt_dlp.extractor import gen_extractors
+        return any(
+            getattr(extractor, "IE_NAME", "") != "generic"
+            and extractor.suitable(url)
+            for extractor in gen_extractors()
+        )
+    except Exception:
+        app.logger.debug("yt-dlp extractor detection failed", exc_info=True)
+        return False
+
+
 def clean_url(value):
     value = (value or "").strip()
 
@@ -430,9 +463,7 @@ def clean_url(value):
     host = (parsed.hostname or "").lower().rstrip(".")
 
     if parsed.scheme.lower() not in {"http", "https"}:
-        raise ValueError(
-            "Please enter a valid HTTP or HTTPS URL."
-        )
+        raise ValueError("Please enter a valid HTTP or HTTPS URL.")
 
     if not host or not parsed.netloc:
         raise ValueError("Please enter a valid video URL.")
@@ -440,21 +471,24 @@ def clean_url(value):
     if parsed.username is not None or parsed.password is not None:
         raise ValueError("Invalid video URL.")
 
-    # Existing supported domains
-    allowed_bare = {
-        domain.lower().rstrip(".").removeprefix("www.")
-        for domain in ALLOWED_HOSTS
-    }
-
-    bare_host = host.removeprefix("www.")
-
-    if bare_host not in allowed_bare:
-        raise ValueError(
-            f"This platform is not currently supported: {host}"
-        )
-
     if host in {"localhost", "localhost.localdomain"}:
         raise ValueError("Please enter a public website URL.")
+
+    # Exact domain-boundary matching prevents lookalike hosts such as
+    # youtube.com.example.org from being treated as YouTube.
+    safe_host = any(
+        host == domain or host.endswith("." + domain)
+        for domain in SAFE_YTDLP_SOURCE_HOSTS
+    )
+    if not safe_host:
+        raise ValueError(
+            f"This platform is not enabled in SaveVido: {host}"
+        )
+
+    if not has_supported_safe_ytdlp_extractor(value):
+        raise ValueError(
+            "SaveVido could not find a supported yt-dlp extractor for this URL."
+        )
 
     return value
 
