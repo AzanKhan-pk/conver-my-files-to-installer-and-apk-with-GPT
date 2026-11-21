@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -38,6 +39,40 @@ def safe_target(root: Path, name: str) -> Path:
     if target != resolved_root and resolved_root not in target.parents:
         raise ValueError(f"Update path escapes installation folder: {name}")
     return target
+
+
+def replace_with_retry(source: Path, target: Path, timeout: int = 120) -> None:
+    """Replace an installed file safely, retrying temporary Windows file locks."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    pending = target.with_name(f".{target.name}.savevido-update.tmp")
+    shutil.copy2(source, pending)
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            os.replace(pending, target)
+            return
+        except PermissionError as exc:
+            if time.monotonic() >= deadline:
+                pending.unlink(missing_ok=True)
+                raise TimeoutError(
+                    f"Windows is still using {target.name}. Close SaveVido and retry the update."
+                ) from exc
+            time.sleep(1)
+
+
+def delete_with_retry(target: Path, timeout: int = 120) -> None:
+    """Delete an obsolete installed file after transient Windows locks clear."""
+    deadline = time.monotonic() + timeout
+    while True:
+        try:
+            target.unlink(missing_ok=True)
+            return
+        except PermissionError as exc:
+            if time.monotonic() >= deadline:
+                raise TimeoutError(
+                    f"Windows is still using {target.name}; the update could not remove it."
+                ) from exc
+            time.sleep(1)
 
 
 def wait_for_parent(pid: int) -> None:
@@ -172,16 +207,9 @@ def main() -> int:
         write_status("ready", "Update files verified. Waiting for you to close SaveVido manually.", 90)
         wait_for_parent(args.wait_pid)
 
-        # Ensure the executable is no longer locked before touching installed files.
-        for _ in range(30):
-            try:
-                with exe.open("ab"):
-                    pass
-                break
-            except OSError:
-                time.sleep(1)
-        else:
-            raise TimeoutError("SaveVido is still running. Close it and try again.")
+        # The parent process has exited. Do not use an append-open probe on the
+        # EXE: Windows security scanners can temporarily deny that probe even
+        # after SaveVido has closed. Retry the actual atomic replacements below.
 
         all_targets = {safe_target(root, name) for name in staged} | {safe_target(root, name) for name in deleted}
         for target in all_targets:
@@ -196,13 +224,14 @@ def main() -> int:
         try:
             for name, source in staged.items():
                 target = safe_target(root, name)
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(source, target)
+                replace_with_retry(source, target)
             for name in sorted(deleted):
                 target = safe_target(root, name)
                 if target.is_file():
-                    target.unlink()
-            (root / "build_info.json").write_text(json.dumps({"version": version}, indent=2), encoding="utf-8")
+                    delete_with_retry(target)
+            version_file = stage_root / "build_info.json"
+            version_file.write_text(json.dumps({"version": version}, indent=2), encoding="utf-8")
+            replace_with_retry(version_file, root / "build_info.json")
         except Exception:
             for target, backup in backups.items():
                 if backup and backup.exists():
