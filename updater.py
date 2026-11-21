@@ -135,7 +135,7 @@ def main() -> int:
         })
         # Publish complete JSON atomically so the UI never reads a half-written file.
         temp_status = status_path.with_name(status_path.name + ".tmp")
-        with temp_status.open("w", encoding="utf-8", newline="\\n") as handle:
+        with temp_status.open("w", encoding="utf-8", newline="\n") as handle:
             handle.write(payload)
             handle.flush()
             os.fsync(handle.fileno())
