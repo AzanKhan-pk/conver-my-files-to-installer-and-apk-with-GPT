@@ -1,48 +1,96 @@
 
-name: SaveVido source validation
+name: SaveVido - Build & Validation
 
 on:
   push:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: savevido-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  syntax-check:
+  validation:
+    name: Python & Application Validation
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
-      - name: Check out source
+      # 1. Checkout repository
+      - name: Checkout source
         uses: actions/checkout@v4
 
-      - name: Set up Python
+      # 2. Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: requirements.txt
 
+      # 3. Upgrade pip
       - name: Upgrade pip
-        run: python -m pip install --upgrade pip
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
 
+      # 4. Install project dependencies
       - name: Install dependencies
         run: |
-          pip install -r requirements.txt
-          pip install --upgrade "yt-dlp[default]"
+          python -m pip install -r requirements.txt
+          python -m pip install --upgrade "yt-dlp[default]"
 
-      - name: Verify yt-dlp
+      # 5. Verify installed packages
+      - name: Verify dependencies
+        run: |
+          python -m pip check
+          python -m pip show Flask
+          python -m pip show yt-dlp
+          python -m pip show gallery-dl
+
+      # 6. Verify yt-dlp extractors
+      - name: Verify yt-dlp extractors
         run: |
           python -m yt_dlp --version
-          python -m yt_dlp --list-extractors
+          python -m yt_dlp --list-extractors > extractors.txt
+          echo "Total extractors:"
+          wc -l extractors.txt
+          echo "Checking XHamster extractor:"
+          grep -i xhamster extractors.txt || true
 
+      # 7. Python syntax validation
       - name: Compile Python files
-        run: python -m py_compile app.py desktop_launcher.py
+        run: |
+          python -m py_compile app.py desktop_launcher.py
 
-      - name: Set up Node.js
+      # 8. Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "20"
 
-      - name: Check browser JavaScript syntax
-        run: node --check static/script.js
+      # 9. JavaScript validation
+      - name: Check JavaScript syntax
+        run: |
+          node --check static/script.js
 
+      # 10. Validate manifest
       - name: Validate manifest JSON
-        run: python -m json.tool manifest.json > /dev/null
+        run: |
+          python -m json.tool manifest.json > /dev/null
+          echo "Manifest JSON is valid."
+
+      # 11. Upload extractor list for debugging
+      - name: Save extractor report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: yt-dlp-extractor-report
+          path: extractors.txt
+          if-no-files-found: ignore
+          retention-days: 7
