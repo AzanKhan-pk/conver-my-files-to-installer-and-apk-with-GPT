@@ -232,6 +232,25 @@ ALLOWED_HOSTS = {
 }
 
 
+# yt-dlp source hosts enabled by SaveVido.
+# Keep this list limited to mainstream/general-purpose platforms; yt-dlp's
+# full extractor catalogue also contains adult-content and other unsuitable sources.
+SAFE_YTDLP_SOURCE_HOSTS = {
+    "youtube.com", "youtu.be", "youtube-nocookie.com",
+    "tiktok.com",
+    "instagram.com",
+    "facebook.com", "fb.watch",
+    "twitter.com", "x.com",
+    "reddit.com", "redd.it", "v.redd.it",
+    "vimeo.com",
+    "dailymotion.com", "dai.ly",
+    "twitch.tv",
+    "soundcloud.com", "snd.sc",
+    "bilibili.com", "b23.tv",
+    "pinterest.com", "pin.it",
+}
+
+
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
 JOB_LAST_PERSISTED = {}
