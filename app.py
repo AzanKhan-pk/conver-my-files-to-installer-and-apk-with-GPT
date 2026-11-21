@@ -207,15 +207,6 @@ ALLOWED_HOSTS = {
     "i.pinimg.com", "images.pinimg.com",
     "v.pinimg.com",
 
-    # Darkero
-    "darkero.co", "www.darkero.co",
-    "darkero.com", "www.darkero.com",
-    "files.darkero.com",
-
-    # Baddielatina
-    "baddielatina.com",
-    "www.baddielatina.com",
-    "files.baddielatina.com",
     # Image hosting
     "imgur.com", "i.imgur.com",
     "imagebam.com", "imageshack.com",
@@ -243,7 +234,7 @@ SAFE_YTDLP_SOURCE_HOSTS = {
     "vimeo.com", "dailymotion.com", "dai.ly", "twitch.tv",
     "soundcloud.com", "snd.sc", "bilibili.com", "b23.tv",
     "pinterest.com", "pin.it", "archive.org", "bandcamp.com",
-    "mixcloud.com", "streamable.com", "rumble.com", "tumblr.com",
+    "mixcloud.com", "streamable.com", "rumble.com",
 }
 
 
