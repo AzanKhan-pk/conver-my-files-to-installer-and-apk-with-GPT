@@ -8,6 +8,7 @@ import sqlite3
 import json
 import tempfile
 import threading
+from functools import lru_cache
 import time
 import uuid
 from datetime import datetime, timezone
@@ -237,17 +238,12 @@ ALLOWED_HOSTS = {
 # full extractor catalogue also contains adult-content and other unsuitable sources.
 SAFE_YTDLP_SOURCE_HOSTS = {
     "youtube.com", "youtu.be", "youtube-nocookie.com",
-    "tiktok.com",
-    "instagram.com",
-    "facebook.com", "fb.watch",
-    "twitter.com", "x.com",
-    "reddit.com", "redd.it", "v.redd.it",
-    "vimeo.com",
-    "dailymotion.com", "dai.ly",
-    "twitch.tv",
-    "soundcloud.com", "snd.sc",
-    "bilibili.com", "b23.tv",
-    "pinterest.com", "pin.it",
+    "tiktok.com", "instagram.com", "facebook.com", "fb.watch",
+    "twitter.com", "x.com", "reddit.com", "redd.it", "v.redd.it",
+    "vimeo.com", "dailymotion.com", "dai.ly", "twitch.tv",
+    "soundcloud.com", "snd.sc", "bilibili.com", "b23.tv",
+    "pinterest.com", "pin.it", "archive.org", "bandcamp.com",
+    "mixcloud.com", "streamable.com", "rumble.com", "tumblr.com",
 }
 
 
@@ -435,14 +431,20 @@ def send_notification(subject, body):
         )
 
 
+@lru_cache(maxsize=1)
+def _get_ytdlp_extractors():
+    """Load yt-dlp's extractor registry once per app run; refreshes on app update."""
+    from yt_dlp.extractor import gen_extractors
+    return tuple(gen_extractors())
+
+
 def has_supported_safe_ytdlp_extractor(url):
-    """Let yt-dlp identify the matching extractor, excluding its catch-all generic extractor."""
+    """Use yt-dlp's current extractor registry without rebuilding it for every URL."""
     try:
-        from yt_dlp.extractor import gen_extractors
         return any(
             getattr(extractor, "IE_NAME", "") != "generic"
             and extractor.suitable(url)
-            for extractor in gen_extractors()
+            for extractor in _get_ytdlp_extractors()
         )
     except Exception:
         app.logger.debug("yt-dlp extractor detection failed", exc_info=True)
@@ -681,10 +683,13 @@ def find_stop_signal(error):
 
 def base_ydl_options():
     options = {
-"retries": 10,
-"fragment_retries": 10,
-"extractor_retries": 3,
-"socket_timeout": 30,
+        # Shorter retry/timeout windows keep metadata fetching responsive.
+        "retries": 2,
+        "fragment_retries": 2,
+        "extractor_retries": 1,
+        "socket_timeout": 12,
+        # Parallel fragment requests can improve supported media downloads.
+        "concurrent_fragment_downloads": 4,
     }
 
     if FFMPEG_PATH:
