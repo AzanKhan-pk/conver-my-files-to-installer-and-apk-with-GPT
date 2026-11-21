@@ -8,7 +8,6 @@ import sqlite3
 import json
 import tempfile
 import threading
-from functools import lru_cache
 import time
 import uuid
 from datetime import datetime, timezone
@@ -228,7 +227,6 @@ ALLOWED_HOSTS = {
 # Keep this list limited to mainstream/general-purpose platforms; yt-dlp's
 # full extractor catalogue also contains adult-content and other unsuitable sources.
 SAFE_YTDLP_SOURCE_HOSTS = {
-    "youtube.com", "youtu.be", "youtube-nocookie.com",
     "tiktok.com", "instagram.com", "facebook.com", "fb.watch",
     "twitter.com", "x.com", "reddit.com", "redd.it", "v.redd.it",
     "vimeo.com", "dailymotion.com", "dai.ly", "twitch.tv",
@@ -422,26 +420,6 @@ def send_notification(subject, body):
         )
 
 
-@lru_cache(maxsize=1)
-def _get_ytdlp_extractors():
-    """Load yt-dlp's extractor registry once per app run; refreshes on app update."""
-    from yt_dlp.extractor import gen_extractors
-    return tuple(gen_extractors())
-
-
-def has_supported_safe_ytdlp_extractor(url):
-    """Use yt-dlp's current extractor registry without rebuilding it for every URL."""
-    try:
-        return any(
-            getattr(extractor, "IE_NAME", "") != "generic"
-            and extractor.suitable(url)
-            for extractor in _get_ytdlp_extractors()
-        )
-    except Exception:
-        app.logger.debug("yt-dlp extractor detection failed", exc_info=True)
-        return False
-
-
 def clean_url(value):
     value = (value or "").strip()
 
@@ -475,11 +453,6 @@ def clean_url(value):
     if not safe_host:
         raise ValueError(
             f"This platform is not enabled in SaveVido: {host}"
-        )
-
-    if not has_supported_safe_ytdlp_extractor(value):
-        raise ValueError(
-            "SaveVido could not find a supported yt-dlp extractor for this URL."
         )
 
     return value
