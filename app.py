@@ -494,14 +494,15 @@ def clean_url(value):
     # yt-dlp selects the matching extractor automatically. SaveVido still
     # limits accepted source hosts to its maintained general-purpose host list.
     safe_host = any(
-    host == domain or host.endswith("." + domain)
-    for domain in ALLOWED_HOSTS
-)
-if not safe_host:
-    raise ValueError(
-        f"This platform is not enabled in SaveVido: {host}"
+        host == domain or host.endswith("." + domain)
+        for domain in ALLOWED_HOSTS
     )
+    if not safe_host:
+        raise ValueError(
+            f"This platform is not enabled in SaveVido: {host}"
+        )
 
+    return value
 
 
 def platform_for(url):
