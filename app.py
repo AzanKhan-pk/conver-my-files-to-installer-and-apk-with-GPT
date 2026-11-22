@@ -986,11 +986,18 @@ def run_gallery_dl_urls(url, browser_cookies=None):
     command.extend(urls)
     source_platform = platform_for(urls[0]) if urls else "unknown"
     try:
+        # Pinterest pages can respond more slowly than other public sources.
+        # Give its extractor a little more time without allowing an unlimited wait.
+        extraction_timeout = (
+            18 if source_platform in {"Facebook", "Instagram"}
+            else 60 if source_platform == "Pinterest"
+            else 35
+        )
         result = subprocess.run(
             command,
             capture_output=True,
             text=True,
-            timeout=18 if source_platform in {"Facebook", "Instagram"} else 35,
+            timeout=extraction_timeout,
             check=False,
         )
     except subprocess.TimeoutExpired as error:
