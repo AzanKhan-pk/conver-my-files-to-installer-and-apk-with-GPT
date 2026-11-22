@@ -136,6 +136,7 @@ QUALITY_HEIGHTS = {
 }
 
 
+
 ALLOWED_HOSTS = {
     # YouTube
     "youtube.com", "www.youtube.com", "m.youtube.com",
@@ -151,6 +152,11 @@ ALLOWED_HOSTS = {
     "tiktokcdn-us.com", "muscdn.com",
     "byteoversea.com",
 
+    # FapHouse
+    "faphouse.com", "www.faphouse.com",
+    "m.faphouse.com", "api.faphouse.com",
+    "cdn.faphouse.com",
+
     # Instagram
     "instagram.com", "www.instagram.com",
     "cdninstagram.com", "scontent.cdninstagram.com",
@@ -159,8 +165,7 @@ ALLOWED_HOSTS = {
     # Facebook
     "facebook.com", "www.facebook.com",
     "m.facebook.com", "fb.watch",
-    "fbcdn.net", "fbsbx.com",
-    "video.xx.fbcdn.net",
+    "fbsbx.com", "video.xx.fbcdn.net",
 
     # X / Twitter
     "twitter.com", "www.twitter.com",
@@ -182,8 +187,7 @@ ALLOWED_HOSTS = {
 
     # Dailymotion
     "dailymotion.com", "www.dailymotion.com",
-    "dai.ly", "dmcdn.net",
-    "s1.dmcdn.net",
+    "dai.ly", "dmcdn.net", "s1.dmcdn.net",
 
     # Twitch
     "twitch.tv", "www.twitch.tv",
@@ -197,14 +201,68 @@ ALLOWED_HOSTS = {
 
     # Bilibili
     "bilibili.com", "www.bilibili.com",
-    "b23.tv", "hdslb.com",
-    "bilivideo.com",
+    "b23.tv", "hdslb.com", "bilivideo.com",
 
     # Pinterest
     "pinterest.com", "www.pinterest.com",
     "pin.it", "www.pin.it",
     "i.pinimg.com", "images.pinimg.com",
     "v.pinimg.com",
+
+    # Darkero
+    "darkero.co", "www.darkero.co",
+    "darkero.com", "www.darkero.com",
+    "files.darkero.com",
+
+    # Baddielatina
+    "baddielatina.com", "www.baddielatina.com",
+    "files.baddielatina.com",
+
+    # Pornhub
+    "pornhub.com", "www.pornhub.com",
+    "m.pornhub.com", "pornhub.org",
+    "pornhubpremium.com", "phncdn.com",
+    "www.phncdn.com", "ci.phncdn.com",
+    "ei.phncdn.com", "di.phncdn.com",
+    "thumbs.phncdn.com",
+
+    # XNXX
+    "xnxx.com", "www.xnxx.com",
+    "m.xnxx.com", "xnxx.tv",
+    "xnxx.health", "xnxx-cdn.com",
+
+    # XVideos
+    "xvideos.com", "www.xvideos.com",
+    "xvideos.red", "xvideos-cdn.com",
+
+    # Xhamster
+    "xhamster.com", "www.xhamster.com",
+    "xhamster.desi", "xhcdn.com",
+
+    # XVideos-style media hosting
+    "xv-cdn.com",
+
+    # Stripchat
+    "stripchat.com", "www.stripchat.com",
+    "static.stripchat.com",
+
+    # RedTube
+    "redtube.com", "www.redtube.com",
+
+    # YouPorn
+    "youporn.com", "www.youporn.com",
+
+    # SpankBang
+    "spankbang.com", "www.spankbang.com",
+
+    # Eporner
+    "eporner.com", "www.eporner.com",
+
+    # Tube8
+    "tube8.com", "www.tube8.com",
+
+    # TNAFlix
+    "tnaflix.com", "www.tnaflix.com",
 
     # Image hosting
     "imgur.com", "i.imgur.com",
@@ -436,15 +494,13 @@ def clean_url(value):
     # yt-dlp selects the matching extractor automatically. SaveVido still
     # limits accepted source hosts to its maintained general-purpose host list.
     safe_host = any(
-        host == domain or host.endswith("." + domain)
-        for domain in ALLOWED_HOSTS
+    host == domain or host.endswith("." + domain)
+    for domain in ALLOWED_HOSTS
+)
+if not safe_host:
+    raise ValueError(
+        f"This platform is not enabled in SaveVido: {host}"
     )
-    if not safe_host:
-        raise ValueError(
-            f"This platform is not enabled in SaveVido: {host}"
-        )
-
-    return value
 
 
 
