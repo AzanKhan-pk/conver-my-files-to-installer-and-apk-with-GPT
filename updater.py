@@ -75,6 +75,28 @@ def delete_with_retry(target: Path, timeout: int = 120) -> None:
             time.sleep(1)
 
 
+def request_parent_close(pid: int) -> None:
+    """Ask every top-level window owned by the SaveVido process to close."""
+    if sys.platform != "win32" or not pid:
+        return
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    enum_proc = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def close_window(hwnd, _):
+        owner_pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(owner_pid))
+        if owner_pid.value == pid:
+            # The app only accepts WM_CLOSE once its update-ready state is set.
+            user32.PostMessageW(hwnd, 0x0010, 0, 0)
+        return True
+
+    callback = enum_proc(close_window)
+    user32.EnumWindows(callback, 0)
+
+
 def wait_for_parent(pid: int) -> None:
     if not pid:
         return
@@ -94,9 +116,16 @@ def wait_for_parent(pid: int) -> None:
                 return
             raise OSError(error, "Could not safely wait for SaveVido to close; update was not applied.")
         try:
-            result = kernel32.WaitForSingleObject(handle, 0xFFFFFFFF)
-            if result != 0:
-                raise OSError(ctypes.get_last_error(), "Could not confirm that SaveVido has closed; update was not applied.")
+            deadline = time.monotonic() + 60
+            while True:
+                result = kernel32.WaitForSingleObject(handle, 500)
+                if result == 0:
+                    return
+                if result != 0x00000102:  # WAIT_TIMEOUT
+                    raise OSError(ctypes.get_last_error(), "Could not confirm that SaveVido has closed; update was not applied.")
+                request_parent_close(pid)
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("SaveVido did not close. Exit it from the system tray and retry the update.")
         finally:
             kernel32.CloseHandle(handle)
     else:
@@ -219,7 +248,7 @@ def main() -> int:
                 staged.pop(PurePosixPath(str(name)).as_posix(), None)
             write_status("downloading", f"Downloaded and verified package {patch_index + 1}/{len(manifest_chain)}", int((patch_index + 1) * 80 / len(manifest_chain)))
 
-        write_status("ready", "Update files verified. Waiting for you to close SaveVido manually.", 90)
+        write_status("ready", "Update verified. Closing SaveVido to apply the update...", 90)
         wait_for_parent(args.wait_pid)
 
         # The parent process has exited. Do not use an append-open probe on the
@@ -274,9 +303,12 @@ def main() -> int:
 
         if not write_status("installed", "Update completed and all installed files were verified. Open SaveVido again to use the new version.", 100):
             raise RuntimeError("Update was applied, but the success status could not be saved.")
+        # Relaunch only after every updated file has passed SHA-256 verification.
+        if exe.is_file():
+            subprocess.Popen([str(exe)], cwd=str(root), close_fds=True)
         if sys.platform == "win32":
             import ctypes
-            ctypes.windll.user32.MessageBoxW(0, "SaveVido update completed successfully. You can open SaveVido now.", "SaveVido Updater", 0x40)
+            ctypes.windll.user32.MessageBoxW(0, "SaveVido has been updated successfully and is restarting.", "SaveVido Updater", 0x40)
         return 0
 
     except Exception as exc:
