@@ -12,7 +12,7 @@ os.environ.setdefault("QT_OPENGL", "software")
 from PySide6.QtCore import QObject, QTimer, QUrl, Qt, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtGui import QAction, QIcon
-from PySide6.QtWidgets import QApplication, QMainWindow, QMenu, QMessageBox, QSystemTrayIcon
+from PySide6.QtWidgets import QApplication, QFileDialog, QMainWindow, QMenu, QMessageBox, QSystemTrayIcon
 from PySide6.QtWebEngineCore import QWebEnginePage, QWebEnginePermission
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from werkzeug.serving import make_server
@@ -163,6 +163,8 @@ class UpdatePage(QWebEnginePage):
             elif url.host() == "open-location-settings":
                 if sys.platform == "win32":
                     QDesktopServices.openUrl(QUrl("ms-settings:privacy-location"))
+            elif url.host() == "browse-location":
+                self.window.choose_download_location()
             return False
         return super().acceptNavigationRequest(url, nav_type, is_main_frame)
 
@@ -227,6 +229,27 @@ class SaveVidoWindow(QMainWindow):
     def dispatch(self, name, data):
         payload = json.dumps(data).replace("</", "<\\/")
         self.browser.page().runJavaScript(f"window.dispatchEvent(new CustomEvent('{name}', {{detail: {payload}}}));")
+
+    def choose_download_location(self):
+        selected = QFileDialog.getExistingDirectory(
+            self,
+            "Choose SaveVido download folder",
+            str(savevido_app.DOWNLOAD_ROOT),
+            QFileDialog.Option.ShowDirsOnly,
+        )
+        if not selected:
+            return
+        selected_json = json.dumps(selected)
+        script = (
+            "fetch('/api/set-download-location', {method:'POST', "
+            "headers:{'Content-Type':'application/json'}, "
+            f"body:JSON.stringify({{path:{selected_json}}})"
+            "}).then(r=>r.json()).then(data=>{"
+            "if(data.ok){window.dispatchEvent(new CustomEvent('savevido-location-changed',{detail:data}));}"
+            "else{window.dispatchEvent(new CustomEvent('savevido-location-error',{detail:data}));}"
+            "}).catch(error=>window.dispatchEvent(new CustomEvent('savevido-location-error',{detail:{error:error.message}})));"
+        )
+        self.browser.page().runJavaScript(script)
 
     def check_updates(self, silent=False):
         self.silent_check = silent
