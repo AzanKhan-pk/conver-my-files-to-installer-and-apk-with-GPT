@@ -629,12 +629,12 @@
               >
               <span>
                 <strong>Use my browser session (optional)</strong>
-                <small>For Instagram image posts in the local desktop app only. Uses your own signed-in browser profile on this device; it is never uploaded or bundled.</small>
+                <small>If a supported site asks you to sign in, enable this to let the local desktop app read that site's cookies from your selected browser profile. Cookies stay on this device and are never uploaded. Only use your own authorized account.</small>
               </span>
             </label>
 
             <label id="browserChoiceWrap" hidden>
-              Browser for Instagram
+              Browser profile
               <select id="browserChoice">
                 <option value="chrome">Google Chrome</option>
                 <option value="edge">Microsoft Edge</option>
@@ -1426,7 +1426,7 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261120-location-persistent-3"
+    src="{{ url_for('static', filename='script.js') }}?v=20261123-download-reliability-1"
   ></script>
   <script src="{{ url_for('static', filename='update.js') }}?v=1" defer></script>
 
