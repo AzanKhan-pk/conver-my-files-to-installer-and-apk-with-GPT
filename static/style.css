@@ -143,6 +143,32 @@ select option{background:var(--surface);color:var(--ink)}
   border-radius: 12px;
 }
 
+
+.download-progress-head-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.download-progress-head-actions [data-action="dismiss"] {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+.download-progress-head-actions [data-action="dismiss"]:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.download-progress-info [data-role="eta"] { white-space: nowrap; }
+
 .download-progress-header {
   display: flex;
   align-items: center;
