@@ -740,8 +740,24 @@ def requested_browser_session(payload, url):
     return browser
 
 
+TIKTOK_REQUEST_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/143.0.0.0 Safari/537.36"
+)
+
+
+def apply_site_request_options(url, options):
+    """Apply a conservative site-specific request header for TikTok."""
+    if platform_for(url) == "TikTok":
+        headers = dict(options.get("http_headers") or {})
+        headers["User-Agent"] = TIKTOK_REQUEST_USER_AGENT
+        options["http_headers"] = headers
+    return options
+
+
 def extract_info_with_retry(url, download=False, options=None):
-    options = options or base_ydl_options()
+    options = apply_site_request_options(url, options or base_ydl_options())
 
     try:
         with yt_dlp.YoutubeDL(options) as ydl:
@@ -1424,6 +1440,7 @@ def run_download_job(job_id):
                 options["merge_output_format"] = "mp4"
             file_type = "MP4"
 
+        options = apply_site_request_options(url, options)
         update_job(job_id, status="downloading")
         with yt_dlp.YoutubeDL(options) as ydl:
             # Reuse the metadata already fetched above instead of asking the
