@@ -1326,17 +1326,20 @@ def progress_hook(job_id):
 
 
 def find_output_file(temp_dir, mode):
-    expected_ext = ".mp3" if mode == "audio" else ".mp4"
+    accepted_extensions = {".mp3"} if mode == "audio" else {
+        ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".ts", ".flv"
+    }
     candidates = [
         path for path in Path(temp_dir).glob("*")
         if path.is_file()
-        and path.suffix.lower() == expected_ext
-        and not path.name.endswith(".part")
+        and path.suffix.lower() in accepted_extensions
+        and not path.name.endswith((".part", ".ytdl", ".temp"))
     ]
     if not candidates:
+        expected = "MP3" if mode == "audio" else "video"
         raise RuntimeError(
-            f"No completed {expected_ext[1:].upper()} file was produced. "
-            "The source may not provide this format."
+            f"No completed {expected} file was produced. "
+            "This site may provide a different format or may have blocked the media request."
         )
 
     final_path = max(candidates, key=lambda path: path.stat().st_size)
@@ -1345,7 +1348,7 @@ def find_output_file(temp_dir, mode):
 
     with final_path.open("rb") as handle:
         header = handle.read(32).lstrip().lower()
-    if header.startswith(b"<!doctype") or header.startswith(b"<html"):
+    if header.startswith((b"<!doctype", b"<html")):
         raise RuntimeError("The source returned an HTML error page.")
 
     return final_path, final_path.stat().st_size
@@ -2050,7 +2053,7 @@ def download_file(job_id):
             "error": "Downloaded file is missing.",
         }), 404
 
-    extension = "mp3" if job["mode"] == "audio" else "mp4"
+    extension = path.suffix.lower().lstrip(".") or ("mp3" if job["mode"] == "audio" else "mp4")
 
     safe_name = re.sub(
         r"[^\w\s.-]", "",
