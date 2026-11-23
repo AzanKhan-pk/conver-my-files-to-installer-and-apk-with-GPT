@@ -47,6 +47,23 @@ def version_tuple(value):
 RELEASE_CONFIG_URL = f"https://raw.githubusercontent.com/{REPO}/savevido-central-platform/platform/release-config.json"
 
 
+def get_update_response(url, attempts=3):
+    """Fetch update metadata with a generous read timeout and transient retries."""
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            return requests.get(
+                url,
+                timeout=(15, 60),
+                headers={"Cache-Control": "no-cache", "User-Agent": "SaveVido-Updater"},
+            )
+        except (requests.exceptions.Timeout, requests.exceptions.ConnectionError) as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(1.5 * (attempt + 1))
+    raise last_error
+
+
 def update_is_mandatory(version):
     """Make an update required 48 hours after it is first detected."""
     state_file = Path(savevido_app.APP_DATA_DIR) / "update-reminder.json"
@@ -84,7 +101,7 @@ class UpdateChecker(QObject):
     def check(self):
         def worker():
             try:
-                response = requests.get(RELEASE_CONFIG_URL, timeout=(8, 20), headers={"Cache-Control": "no-cache"})
+                response = get_update_response(RELEASE_CONFIG_URL)
                 response.raise_for_status()
                 config = response.json()
                 windows = (config.get("channels") or {}).get("windows") or {}
@@ -100,7 +117,7 @@ class UpdateChecker(QObject):
                     return
 
                 manifest_url = f"https://github.com/{REPO}/releases/download/v{tag}/SaveVido-Update-Manifest.json"
-                manifest_response = requests.get(manifest_url, timeout=(8, 30), headers={"Cache-Control": "no-cache"})
+                manifest_response = get_update_response(manifest_url)
                 manifest_response.raise_for_status()
                 latest_manifest = manifest_response.json()
                 installer_url = str(windows.get("download_url") or "")
@@ -119,7 +136,7 @@ class UpdateChecker(QObject):
                         break
                     visited.add(base_version)
                     previous_url = f"https://github.com/{REPO}/releases/download/v{base_version}/SaveVido-Update-Manifest.json"
-                    previous_response = requests.get(previous_url, timeout=(8, 30), headers={"Cache-Control": "no-cache"})
+                    previous_response = get_update_response(previous_url)
                     if not previous_response.ok:
                         break
                     previous_manifest = previous_response.json()
