@@ -408,7 +408,7 @@ fetchButton.addEventListener("click", async () => {
       const response = await fetch("/api/info", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url })
+        body: JSON.stringify({ url, ...getImageSessionOptions() })
       });
       const data = await response.json();
 
@@ -460,7 +460,7 @@ async function downloadMedia() {
     const response = await fetch("/api/download", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: media.url, mode: media.mode, quality: media.quality })
+      body: JSON.stringify({ url: media.url, mode: media.mode, quality: media.quality, ...getImageSessionOptions() })
     });
     const data = await response.json();
     if (!response.ok || !data.ok || !data.job_id) {
@@ -480,6 +480,14 @@ async function downloadMedia() {
   } finally {
     setButtonLoading(downloadButton, false, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "MP4"} ↗`);
   }
+}
+
+function formatEta(seconds) {
+  if (seconds === null || seconds === undefined || !Number.isFinite(Number(seconds))) return "ETA —";
+  let value = Math.max(0, Math.floor(Number(seconds)));
+  const hours = Math.floor(value / 3600); value %= 3600;
+  const minutes = Math.floor(value / 60); const secs = value % 60;
+  return hours ? `ETA ${hours}h ${minutes}m` : minutes ? `ETA ${minutes}m ${secs}s` : `ETA ${secs}s`;
 }
 
 function formatBytes(bytes) {
@@ -506,12 +514,16 @@ function createDownloadPanel(jobId, title) {
   panel.innerHTML = `
     <div class="download-progress-header">
       <strong class="download-progress-title">${escapeHtml(title || "Downloading...")}</strong>
-      <span data-role="percent">0%</span>
+      <span class="download-progress-head-actions">
+        <span data-role="percent">0%</span>
+        <button data-action="dismiss" type="button" aria-label="Remove progress panel" title="Remove from active list">×</button>
+      </span>
     </div>
     <div class="download-progress-bar"><div data-role="fill" class="download-progress-fill" style="width:0%"></div></div>
     <div class="download-progress-info">
       <span data-role="size">0 B / 0 B</span>
       <span data-role="speed">0 B/s</span>
+      <span data-role="eta">ETA —</span>
     </div>
     <div class="download-progress-actions">
       <button data-action="pause" type="button">⏸ Pause</button>
@@ -529,6 +541,7 @@ function createDownloadPanel(jobId, title) {
     controlDownload(panel, jobId, "resume"));
   panel.querySelector('[data-action="cancel"]').addEventListener("click", () =>
     controlDownload(panel, jobId, "cancel"));
+  panel.querySelector('[data-action="dismiss"]').addEventListener("click", () => panel.remove());
   return panel;
 }
 
@@ -560,7 +573,7 @@ async function monitorDownload(jobId, panel, media) {
     const downloaded = formatBytes(job.downloaded_bytes || 0);
     const total = formatBytes(job.total_bytes || 0);
     const speed = formatBytes(job.speed || 0);
-    updateDownloadProgress(panel, percent, downloaded, total, speed);
+    updateDownloadProgress(panel, percent, downloaded, total, speed, job.eta);
     updateDownloadNotification(job);
 
     if (["starting", "preparing"].includes(job.status)) {
@@ -587,24 +600,29 @@ async function monitorDownload(jobId, panel, media) {
     } else if (job.status === "completed") {
       updateDownloadProgress(panel, 100, formatBytes(job.downloaded_bytes || 0), formatBytes(job.total_bytes || 0), "0 B");
       setDownloadProgressMessage(panel, "Download complete. Preparing file...");
-      const fileResponse = await fetch(`/api/download/${encodeURIComponent(jobId)}/file`);
-      if (!fileResponse.ok) {
-        let message = "Could not retrieve the downloaded file.";
-        try { const errorData = await fileResponse.json(); message = errorData.error || message; } catch (_) {}
-        throw new Error(message);
+      const isDesktopApp = new URLSearchParams(window.location.search).has("desktop");
+      if (!isDesktopApp) {
+        const fileResponse = await fetch(`/api/download/${encodeURIComponent(jobId)}/file`);
+        if (!fileResponse.ok) {
+          let message = "Could not retrieve the downloaded file.";
+          try { const errorData = await fileResponse.json(); message = errorData.error || message; } catch (_) {}
+          throw new Error(message);
+        }
+        const blob = await fileResponse.blob();
+        if (!blob.size) throw new Error("Downloaded file is empty.");
+        const objectUrl = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        const safeName = (job.title || media.title || "video").replace(/[^\w\s.-]/g, "").trim().slice(0, 90) || "video";
+        link.href = objectUrl;
+        link.download = `${safeName}.${media.mode === "audio" ? "mp3" : "mp4"}`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
       }
-      const blob = await fileResponse.blob();
-      if (!blob.size) throw new Error("Downloaded file is empty.");
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      const safeName = (job.title || media.title || "video").replace(/[^\w\s.-]/g, "").trim().slice(0, 90) || "video";
-      link.href = url;
-      link.download = `${safeName}.${media.mode === "audio" ? "mp3" : "mp4"}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 5000);
-      setDownloadProgressMessage(panel, "✓ Download completed.");
+      setDownloadProgressMessage(panel, isDesktopApp
+        ? `✓ Completed · saved in ${job.file_path || "Downloads\\SaveVido"}`
+        : "✓ Download completed.");
       disableDownloadControls(panel);
       await showCompletedNotification(job);
       await loadDownloadHistory();
@@ -613,15 +631,17 @@ async function monitorDownload(jobId, panel, media) {
   }
 }
 
-function updateDownloadProgress(panel, percent, downloaded, total, speed) {
+function updateDownloadProgress(panel, percent, downloaded, total, speed, eta = null) {
   const percentElement = panel.querySelector('[data-role="percent"]');
   const fillElement = panel.querySelector('[data-role="fill"]');
   const sizeElement = panel.querySelector('[data-role="size"]');
   const speedElement = panel.querySelector('[data-role="speed"]');
+  const etaElement = panel.querySelector('[data-role="eta"]');
   if (percentElement) percentElement.textContent = `${percent.toFixed(1)}%`;
   if (fillElement) fillElement.style.width = `${Math.min(percent, 100)}%`;
   if (sizeElement) sizeElement.textContent = `${downloaded} / ${total}`;
   if (speedElement) speedElement.textContent = `${speed}/s`;
+  if (etaElement) etaElement.textContent = formatEta(eta);
 }
 
 function setDownloadProgressMessage(panel, message, error = false) {
