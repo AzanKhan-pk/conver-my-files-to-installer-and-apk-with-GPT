@@ -1,7 +1,7 @@
 {
   "product": "SaveVido",
-  "current_version": "1.0.201",
-  "updated_at": "2026-11-22T15:59:20.014994Z",
+  "current_version": "1.0.212",
+  "updated_at": "2026-11-23T09:58:32.933024Z",
   "update_service": {
     "status": "Latest Windows release published automatically from GitHub commits.",
     "manifest_url": "https://savevido-central-platform.vercel.app/release-config.json",
@@ -14,11 +14,11 @@
   },
   "channels": {
     "windows": {
-      "version": "1.0.201",
+      "version": "1.0.212",
       "status": "Available: latest verified Windows installer.",
-      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/download/v1.0.201/SaveVido-Setup.exe",
+      "download_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases/download/v1.0.212/SaveVido-Setup.exe",
       "minimum_os": "Windows 10/11",
-      "sha256": "ccd90b466282e028d67278a7587a4345ae878a278cfcb58e47cba3f242102e5d",
+      "sha256": "0302db8bf642b46e080b6002b887184a57962a978b3c85dd69bfe8c94927e54a",
       "release_page_url": "https://github.com/AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT/releases"
     },
     "android": {
