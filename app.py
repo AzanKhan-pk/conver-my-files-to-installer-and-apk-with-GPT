@@ -6,6 +6,7 @@ import sys
 import smtplib
 import sqlite3
 import json
+import mimetypes
 import tempfile
 import threading
 import time
@@ -2064,10 +2065,7 @@ def download_file(job_id):
         path,
         as_attachment=True,
         download_name=f"{safe_name}.{extension}",
-        mimetype=(
-            "audio/mpeg" if extension == "mp3"
-            else "video/mp4"
-        ),
+        mimetype=mimetypes.guess_type(str(path))[0] or "application/octet-stream",
     )
 
 
