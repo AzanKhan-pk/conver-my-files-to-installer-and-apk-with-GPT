@@ -1182,23 +1182,22 @@ async function refreshDownloadLocation() {
 }
 
 browseLocationButton?.addEventListener("click", async () => {
-  browseLocationButton.disabled = true;
-  browseLocationButton.textContent = "Choose folder…";
-  try {
-    const response = await fetch("/api/browse-location", { method: "POST" });
-    const data = await response.json();
-    if (!response.ok || !data.ok) throw new Error(data.error || "Could not choose folder.");
-    if (!data.cancelled && downloadLocationPath) {
-      downloadLocationPath.textContent = data.path;
-      downloadLocationPath.title = data.path;
-      setStatus("Download folder updated.", "success");
-    }
-  } catch (error) {
-    setStatus(error.message || "Folder selection is available in the local desktop app.", "error");
-  } finally {
-    browseLocationButton.disabled = false;
-    browseLocationButton.textContent = "Browse location";
+  if (new URLSearchParams(window.location.search).has("desktop")) {
+    window.location.href = "savevido://browse-location";
+    return;
   }
+  setStatus("Folder selection is available in the local desktop app.", "error");
+});
+window.addEventListener("savevido-location-changed", event => {
+  const path = event.detail?.path || "";
+  if (downloadLocationPath && path) {
+    downloadLocationPath.textContent = path;
+    downloadLocationPath.title = path;
+    setStatus("Download folder updated.", "success");
+  }
+});
+window.addEventListener("savevido-location-error", event => {
+  setStatus(event.detail?.error || "Could not update the download folder.", "error");
 });
 
 refreshDownloadLocation();
