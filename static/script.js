@@ -614,7 +614,7 @@ async function monitorDownload(jobId, panel, media) {
         const link = document.createElement("a");
         const safeName = (job.title || media.title || "video").replace(/[^\w\s.-]/g, "").trim().slice(0, 90) || "video";
         link.href = objectUrl;
-        link.download = `${safeName}.${media.mode === "audio" ? "mp3" : "mp4"}`;
+        link.download = job.filename || `${safeName}.${media.mode === "audio" ? "mp3" : "mp4"}`;
         document.body.appendChild(link);
         link.click();
         link.remove();
