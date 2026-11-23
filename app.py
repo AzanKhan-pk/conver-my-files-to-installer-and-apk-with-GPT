@@ -1115,7 +1115,7 @@ def get_gallery_image_urls(url, browser_cookies=None):
 
     return run_gallery_dl_urls(
         url,
-        browser_cookies=browser_cookies if platform_for(url) == "Instagram" else None,
+        browser_cookies=browser_cookies,
     )
 
 
@@ -2075,32 +2075,22 @@ def get_download_location():
     return jsonify({"ok": True, "path": str(DOWNLOAD_ROOT)})
 
 
-@app.post("/api/browse-location")
-def browse_download_location():
+@app.post("/api/set-download-location")
+def set_download_location():
     global DOWNLOAD_ROOT, JOBS_ROOT
-    if request.remote_addr not in {"127.0.0.1", "::1"}:
+    if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
         return jsonify({"ok": False, "error": "Available only in the local desktop app."}), 403
-
     try:
-        import tkinter as tk
-        from tkinter import filedialog
-
-        root = tk.Tk()
-        root.withdraw()
-        root.attributes("-topmost", True)
-        selected = filedialog.askdirectory(
-            title="Choose SaveVido download folder",
-            initialdir=str(DOWNLOAD_ROOT),
-            mustexist=True,
-        )
-        root.destroy()
-
-        if not selected:
-            return jsonify({"ok": True, "cancelled": True, "path": str(DOWNLOAD_ROOT)})
-
-        selected_path = Path(selected).expanduser().resolve()
+        payload = request.get_json(silent=True) or {}
+        raw_path = str(payload.get("path") or "").strip()
+        if not raw_path:
+            raise ValueError("Choose a download folder first.")
+        selected_path = Path(raw_path).expanduser().resolve()
         selected_path.mkdir(parents=True, exist_ok=True)
-
+        if not selected_path.is_dir():
+            raise ValueError("The selected download location is not a folder.")
+        jobs_path = selected_path / ".jobs"
+        jobs_path.mkdir(parents=True, exist_ok=True)
         with get_db() as connection:
             connection.execute(
                 """
@@ -2109,18 +2099,19 @@ def browse_download_location():
                 """,
                 ("download_root", str(selected_path)),
             )
-
         DOWNLOAD_ROOT = selected_path
-        JOBS_ROOT = DOWNLOAD_ROOT / ".jobs"
-        JOBS_ROOT.mkdir(parents=True, exist_ok=True)
+        JOBS_ROOT = jobs_path
         return jsonify({"ok": True, "path": str(DOWNLOAD_ROOT)})
-
     except Exception as error:
-        app.logger.warning("Could not choose download folder: %s", error)
-        return jsonify({
-            "ok": False,
-            "error": "Could not open the folder picker. Use the local Windows desktop app.",
-        }), 500
+        app.logger.warning("Could not set download folder: %s", error)
+        return jsonify({"ok": False, "error": str(error) or "Could not set the download folder."}), 400
+
+
+@app.post("/api/browse-location")
+def browse_download_location():
+    if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
+        return jsonify({"ok": False, "error": "Available only in the local desktop app."}), 403
+    return jsonify({"ok": False, "error": "Use the native SaveVido folder picker."}), 409
 
 
 @app.get("/api/history")
