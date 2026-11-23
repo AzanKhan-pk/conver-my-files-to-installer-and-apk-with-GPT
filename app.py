@@ -723,7 +723,7 @@ SAFE_BROWSER_COOKIE_HOSTS = {
     "youtube.com", "youtu.be", "tiktok.com", "instagram.com",
     "facebook.com", "fb.watch", "x.com", "twitter.com", "reddit.com",
     "redd.it", "vimeo.com", "dailymotion.com", "dai.ly",
-    "twitch.tv", "soundcloud.com", "bilibili.com", "pinterest.com",
+    "twitch.tv", "soundcloud.com", "bilibili.com", "pinterest.com", "pin.it",
 }
 def requested_browser_session(payload, url):
     """Read a browser profile only after explicit local opt-in on supported platforms."""
@@ -1127,9 +1127,9 @@ def get_media_info(url, browser_cookies=None):
     options.update({
         # Fetch is a preview operation: do not spend a long time retrying
         # an unresponsive social site. Actual downloads keep base retries.
-        "retries": 0,
-        "extractor_retries": 0,
-        "socket_timeout": 8,
+        "retries": 1,
+        "extractor_retries": 1,
+        "socket_timeout": 18,
     })
     return extract_info_with_retry(url, download=False, options=options)
 
