@@ -43,10 +43,7 @@ DB_PATH = APP_DATA_DIR / "analytics.db"
 # reboots and Windows temporary-file cleanup.
 # Prefer a simple C:\\Downloads\\SaveVido destination on Windows. If the
 # machine restricts writes to the drive root, fall back to the user's Downloads.
-if os.name == "nt":
-    DEFAULT_DOWNLOAD_ROOT = Path(os.getenv("SystemDrive", "C:")) / "Downloads" / "SaveVido"
-else:
-    DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
+DEFAULT_DOWNLOAD_ROOT = Path.home() / "Downloads" / "SaveVido"
 DOWNLOAD_ROOT = Path(os.getenv("SAVEVIDO_DOWNLOAD_DIR", str(DEFAULT_DOWNLOAD_ROOT))).expanduser()
 try:
     DOWNLOAD_ROOT.mkdir(parents=True, exist_ok=True)
@@ -284,6 +281,7 @@ ALLOWED_HOSTS = {
 DOWNLOAD_JOBS = {}
 DOWNLOAD_JOBS_LOCK = threading.Lock()
 JOB_LAST_PERSISTED = {}
+JOB_PROGRESS_SAMPLES = {}
 
 FFMPEG_PATH = (
     os.getenv("FFMPEG_PATH")
@@ -691,7 +689,7 @@ def find_stop_signal(error):
     return None
 
 
-def base_ydl_options():
+def base_ydl_options(browser_cookies=None):
     options = {
         # Shorter retry/timeout windows keep metadata fetching responsive.
         "retries": 2,
@@ -714,8 +712,31 @@ def base_ydl_options():
 
     if Path(cookies_path).is_file():
         options["cookiefile"] = cookies_path
+    if browser_cookies:
+        options["cookiesfrombrowser"] = (browser_cookies,)
 
     return options
+
+
+SAFE_BROWSER_COOKIE_HOSTS = {
+    "youtube.com", "youtu.be", "tiktok.com", "instagram.com",
+    "facebook.com", "fb.watch", "x.com", "twitter.com", "reddit.com",
+    "redd.it", "vimeo.com", "dailymotion.com", "dai.ly",
+    "twitch.tv", "soundcloud.com", "bilibili.com", "pinterest.com",
+}
+def requested_browser_session(payload, url):
+    """Read a browser profile only after explicit local opt-in on supported platforms."""
+    if payload.get("use_browser_session") is not True:
+        return None
+    if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
+        raise PermissionError("Browser cookies are available only in the local desktop app.")
+    host = (urlparse(url).hostname or "").lower().removeprefix("www.")
+    if not any(host == domain or host.endswith("." + domain) for domain in SAFE_BROWSER_COOKIE_HOSTS):
+        raise ValueError("Browser cookies are not enabled for this website.")
+    browser = str(payload.get("browser") or "chrome").lower()
+    if browser not in {"chrome", "edge", "firefox"}:
+        raise ValueError("Choose Chrome, Edge, or Firefox.")
+    return browser
 
 
 def extract_info_with_retry(url, download=False, options=None):
@@ -1098,10 +1119,10 @@ def get_gallery_image_urls(url, browser_cookies=None):
     )
 
 
-def get_media_info(url):
+def get_media_info(url, browser_cookies=None):
     # Fetch metadata with a short, bounded network wait. Keep the more
     # resilient defaults for the actual download operation.
-    options = base_ydl_options()
+    options = base_ydl_options(browser_cookies=browser_cookies)
     options.update({
         # Fetch is a preview operation: do not spend a long time retrying
         # an unresponsive social site. Actual downloads keep base retries.
@@ -1203,6 +1224,7 @@ def new_download_job(url, mode, quality):
         "temp_dir": str(temp_dir),
         "pause_requested": False,
         "cancel_requested": False,
+        "browser_cookies": None,
     }
 
     with DOWNLOAD_JOBS_LOCK:
@@ -1258,45 +1280,47 @@ def progress_hook(job_id):
         job = get_job(job_id)
         if not job:
             raise YtDlpStopSignal("Download job no longer exists.")
-
         if job.get("cancel_requested") or job.get("pause_requested"):
             raise YtDlpStopSignal("Download stopped by user.")
 
         if data.get("status") == "downloading":
-            downloaded = int(data.get("downloaded_bytes") or 0)
-            total = int(
-                data.get("total_bytes")
-                or data.get("total_bytes_estimate")
-                or 0
-            )
-            percent = downloaded / total * 100 if total else 0
-            # A resumed yt-dlp transfer can report a fresh fragment counter.
-            # Never let the visible progress move backwards from the saved state.
-            downloaded = max(downloaded, int(job.get("downloaded_bytes") or 0))
-            total = total or int(job.get("total_bytes") or 0)
-            percent = max(
-                float(job.get("percent") or 0),
-                downloaded / total * 100 if total else 0,
-            )
             now = time.monotonic()
+            filename = str(data.get("filename") or data.get("tmpfilename") or "")
+            total = int(data.get("total_bytes") or data.get("total_bytes_estimate") or 0)
+            downloaded_value = data.get("downloaded_bytes")
+            if downloaded_value is None and total and data.get("fragment_count"):
+                fragment_count = max(1, int(data.get("fragment_count") or 1))
+                fragment_index = max(0, int(data.get("fragment_index") or 0))
+                downloaded_value = total * min(fragment_index, fragment_count) / fragment_count
+            downloaded = max(0, int(downloaded_value or 0))
+            if total:
+                downloaded = min(downloaded, total)
+
+            previous = JOB_PROGRESS_SAMPLES.get(job_id)
+            if previous and previous.get("filename") == filename and now > previous["time"]:
+                measured_speed = max(0.0, (downloaded - previous["bytes"]) / (now - previous["time"]))
+            else:
+                measured_speed = 0.0
+            JOB_PROGRESS_SAMPLES[job_id] = {"filename": filename, "bytes": downloaded, "time": now}
+
+            speed = float(data.get("speed") or measured_speed or 0)
+            eta_value = data.get("eta")
+            eta = max(0, int(eta_value)) if eta_value is not None else (
+                int((total - downloaded) / speed) if total and speed > 0 else None
+            )
+            percent = downloaded / total * 100 if total else 0.0
             persist = now - JOB_LAST_PERSISTED.get(job_id, 0) >= 2.0
             update_job(
-                job_id,
-                persist=persist,
-                status="downloading",
-                downloaded_bytes=downloaded,
-                total_bytes=total,
-                percent=round(min(percent, 100), 2),
-                speed=float(data.get("speed") or 0),
-                eta=data.get("eta"),
+                job_id, persist=persist, status="downloading",
+                downloaded_bytes=downloaded, total_bytes=total,
+                percent=round(min(percent, 99.5), 2),
+                speed=round(speed, 1), eta=eta,
             )
         elif data.get("status") == "finished":
             update_job(
-                job_id,
-                status="processing",
-                percent=100,
-                speed=0,
-                eta=0,
+                job_id, status="processing",
+                percent=min(float(job.get("percent") or 0), 99.5),
+                speed=0, eta=None,
             )
     return hook
 
@@ -1360,11 +1384,12 @@ def run_download_job(job_id):
             temp_dir.mkdir(parents=True, exist_ok=True)
 
         update_job(job_id, status="preparing", error=None)
-        info = get_media_info(url)
+        browser_cookies = job.get("browser_cookies")
+        info = get_media_info(url, browser_cookies=browser_cookies)
         title = info.get("title") or "video"
         update_job(job_id, title=title)
 
-        options = base_ydl_options()
+        options = base_ydl_options(browser_cookies=browser_cookies)
         options.update({
             "outtmpl": str(temp_dir / "%(id)s.%(ext)s"),
             "progress_hooks": [progress_hook(job_id)],
@@ -1440,6 +1465,7 @@ def run_download_job(job_id):
             file_type=file_type,
             file_size=final_size,
         )
+        JOB_PROGRESS_SAMPLES.pop(job_id, None)
         send_telemetry("download_succeeded", source_url=url, file_type=file_type)
 
     except Exception as error:
@@ -1609,9 +1635,10 @@ def api_info():
             }), 400
 
         url = clean_url(raw_url)
+        browser_cookies = requested_browser_session(payload, url)
 
         # Retrieve metadata using the configured yt-dlp options.
-        info = get_media_info(url)
+        info = get_media_info(url, browser_cookies=browser_cookies)
 
         if not info:
             return jsonify({
@@ -1675,22 +1702,7 @@ def api_images_info():
         url = clean_url(raw_url)
         validate_image_source_url(url)
 
-        use_browser_session = payload.get("use_browser_session") is True
-        browser_name = payload.get("browser") or "chrome"
-        browser_cookies = None
-        if use_browser_session:
-            if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
-                raise PermissionError(
-                    "Browser-session access is available only in the local desktop app. "
-                    "A hosted website cannot read cookies from your device."
-                )
-            if platform_for(url) != "Instagram":
-                raise ValueError(
-                    "The optional browser session is currently supported for Instagram image posts only."
-                )
-            if browser_name not in {"chrome", "edge", "firefox"}:
-                raise ValueError("Choose Chrome, Edge, or Firefox.")
-            browser_cookies = browser_name
+        browser_cookies = requested_browser_session(payload, url)
 
         image_urls = get_gallery_image_urls(
             url,
@@ -1762,22 +1774,7 @@ def api_images_download():
         except (TypeError, ValueError):
             raise ValueError("The selected image list is invalid.")
 
-        use_browser_session = payload.get("use_browser_session") is True
-        browser_name = payload.get("browser") or "chrome"
-        browser_cookies = None
-        if use_browser_session:
-            if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
-                raise PermissionError(
-                    "Browser-session access is available only in the local desktop app. "
-                    "A hosted website cannot read cookies from your device."
-                )
-            if platform_for(url) != "Instagram":
-                raise ValueError(
-                    "The optional browser session is currently supported for Instagram image posts only."
-                )
-            if browser_name not in {"chrome", "edge", "firefox"}:
-                raise ValueError("Choose Chrome, Edge, or Firefox.")
-            browser_cookies = browser_name
+        browser_cookies = requested_browser_session(payload, url)
 
         image_urls = get_gallery_image_urls(
             url,
@@ -1895,7 +1892,9 @@ def api_download():
         if mode == "video" and quality not in QUALITY_HEIGHTS:
             raise ValueError("Unsupported video quality.")
 
+        browser_cookies = requested_browser_session(payload, url)
         job_id = new_download_job(url, mode, quality)
+        update_job(job_id, browser_cookies=browser_cookies)
 
         threading.Thread(
             target=run_download_job,
@@ -2039,12 +2038,12 @@ def download_file(job_id):
             "error": "Download is not ready yet.",
         }), 409
 
-    path = Path(job.get("file_path") or "")
-    job_dir = Path(job.get("temp_dir") or "").resolve()
+    path = Path(job.get("file_path") or "").resolve()
+    download_root = DOWNLOAD_ROOT.resolve()
 
     if (
         not path.is_file()
-        or not path.resolve().is_relative_to(job_dir)
+        or not path.is_relative_to(download_root)
     ):
         return jsonify({
             "ok": False,
@@ -2215,17 +2214,22 @@ def open_download_folder(job_id):
     if not job:
         return jsonify({"ok": False, "error": "Download job not found."}), 404
 
-    folder = Path(job.get("temp_dir") or "").resolve()
-    if folder.name != job_id or folder.parent.name != ".jobs" or not folder.is_dir():
-        return jsonify({"ok": False, "error": "Download folder is not available."}), 404
+    file_path = Path(job.get("file_path") or "").resolve()
+    download_root = DOWNLOAD_ROOT.resolve()
+    if (
+        job.get("status") != "completed"
+        or not file_path.is_file()
+        or not file_path.is_relative_to(download_root)
+    ):
+        return jsonify({"ok": False, "error": "The completed download file is not available."}), 404
 
     try:
         if os.name == "nt":
-            os.startfile(str(folder))
+            subprocess.Popen(["explorer.exe", "/select,", str(file_path)])
         elif sys.platform == "darwin":
-            subprocess.Popen(["open", str(folder)])
+            subprocess.Popen(["open", "-R", str(file_path)])
         else:
-            subprocess.Popen(["xdg-open", str(folder)])
+            subprocess.Popen(["xdg-open", str(file_path.parent)])
     except Exception as error:
         app.logger.warning("Could not open download folder: %s", error)
         return jsonify({"ok": False, "error": "Could not open the download folder."}), 500
