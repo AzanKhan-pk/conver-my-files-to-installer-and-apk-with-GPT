@@ -743,12 +743,20 @@ TIKTOK_REQUEST_USER_AGENT = (
 
 
 def apply_site_request_options(url, options):
-    """Use a browser-like TLS/HTTP fingerprint for TikTok via yt-dlp's curl_cffi backend."""
+    """Apply TikTok's public browser headers without requiring a curl_cffi target.
+
+    curl_cffi impersonation targets vary by the version and binary payload
+    bundled by PyInstaller. Forcing the generic "chrome" target can make the
+    packaged app fail before the request is sent. yt-dlp's normal networking
+    backend is the reliable fallback; the current yt-dlp extractor handles
+    the remaining site-specific request details.
+    """
     if platform_for(url) == "TikTok":
-        # curl_cffi is installed through yt-dlp[default]. This is more complete
-        # than changing only the User-Agent header.
-        options["impersonate"] = "chrome"
-        options.pop("http_headers", None)
+        options.setdefault("http_headers", {}).update({
+            "User-Agent": TIKTOK_REQUEST_USER_AGENT,
+            "Referer": "https://www.tiktok.com/",
+        })
+        options.pop("impersonate", None)
     return options
 
 
