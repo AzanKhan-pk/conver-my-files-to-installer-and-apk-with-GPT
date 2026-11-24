@@ -150,11 +150,6 @@ ALLOWED_HOSTS = {
     "tiktokcdn-us.com", "muscdn.com",
     "byteoversea.com",
 
-    # FapHouse
-    "faphouse.com", "www.faphouse.com",
-    "m.faphouse.com", "api.faphouse.com",
-    "cdn.faphouse.com",
-
     # Instagram
     "instagram.com", "www.instagram.com",
     "cdninstagram.com", "scontent.cdninstagram.com",
