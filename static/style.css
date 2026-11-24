@@ -978,9 +978,20 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
 
 
 /* Feedback form: keep contact details and optional one-time location clear. */
-.support-contact button.support-contact-link{
-  appearance:none;background:transparent;font:inherit;cursor:pointer;
+.support-contact-link{
+  appearance:none;display:inline-flex;align-items:center;justify-content:center;
+  max-width:100%;margin-top:10px;padding:10px 14px;
+  border:1px solid var(--lime);border-radius:6px;
+  background:#171a2b;color:#f7f7ff;
+  font:700 12px/1.45 "Manrope",sans-serif;text-align:left;
+  white-space:normal;overflow-wrap:anywhere;cursor:pointer;
+  transition:background 180ms ease,color 180ms ease,border-color 180ms ease,transform 180ms ease;
 }
+.support-contact-link:hover{
+  background:var(--lime);border-color:var(--lime);color:#10120b;transform:translateY(-1px);
+}
+.support-contact-link:focus-visible{outline:2px solid #fff;outline-offset:3px;}
+.support-contact-link:disabled{opacity:.6;cursor:not-allowed;transform:none;}
 .feedback-location-choice{
   display:flex;align-items:flex-start;gap:12px;margin:0 0 18px;
   color:var(--muted);font-size:12px;line-height:1.6;cursor:pointer;
