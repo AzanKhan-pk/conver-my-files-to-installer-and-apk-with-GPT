@@ -682,7 +682,14 @@ def is_network_error(error):
         "incomplete read",
         "remote end closed",
         "connection error",
+        "connectionerror",
         "urlopen error",
+        "failed to resolve",
+        "getaddrinfo failed",
+        "name resolution",
+        "max retries exceeded",
+        "failed to establish a new connection",
+        "no internet",
         "http error 429",
         "http error 502",
         "http error 503",
@@ -1552,7 +1559,7 @@ def run_download_job(job_id):
             update_job(
                 job_id,
                 status="network_error",
-                error="Network error. Check your connection and try resuming.",
+                error=humanize_error(error),
                 speed=0,
             )
         else:
