@@ -214,7 +214,7 @@ async function downloadSelectedImages() {
 
     setStatus(`${selectedIds.length} images downloaded as a ZIP file.`, "success");
   } catch (error) {
-    setStatus(error.message || "Image download failed.", "error");
+    showErrorWithFeedback(error.message || "Image download failed.", urlInput?.value || "");
   } finally {
     button.disabled = false;
     button.textContent = originalText;
@@ -428,11 +428,11 @@ fetchButton.addEventListener("click", async () => {
     resultBox.hidden = true;
     const message = error.message || "Something went wrong.";
     const needsLogin = /login|log in|sign.?in|authentication|cookies required|private video|not authorized/i.test(message);
-    setStatus(
+    showErrorWithFeedback(
       needsLogin && !useBrowserSession?.checked
-        ? message + " If this is your own account, open More Options, enable Allow browser cookies, and choose your browser. SaveVido reads the selected profile locally only after you opt in."
+        ? message + " If this is your own account, open More Options, enable Use my browser session, and choose your browser. SaveVido reads the selected profile locally only after you opt in."
         : message,
-      "error"
+      url
     );
   } finally {
     setButtonLoading(
@@ -472,6 +472,7 @@ async function downloadMedia() {
     }
 
     const panel = createDownloadPanel(data.job_id, media.title);
+    panel.dataset.sourceUrl = media.url;
     setStatus("Download started. You can start another download while this one runs.", "success");
     monitorDownload(data.job_id, panel, media).catch(error => {
       console.error("Download monitor error:", error);
@@ -482,11 +483,11 @@ async function downloadMedia() {
     console.error("Download start error:", error);
     const message = error.message || "Download failed.";
     const needsLogin = /login|log in|sign.?in|authentication|cookies required|private video|not authorized/i.test(message);
-    setStatus(
+    showErrorWithFeedback(
       needsLogin && !useBrowserSession?.checked
-        ? message + " If this is your own account, open More Options, enable Allow browser cookies, and choose your browser. SaveVido reads the selected profile locally only after you opt in."
+        ? message + " If this is your own account, open More Options, enable Use my browser session, and choose your browser. SaveVido reads the selected profile locally only after you opt in."
         : message,
-      "error"
+      media.url
     );
   } finally {
     setButtonLoading(downloadButton, false, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "MP4"} ↗`);
@@ -667,6 +668,16 @@ function setDownloadProgressMessage(panel, message, error = false) {
   if (!element) return;
   element.textContent = message;
   element.classList.toggle("error", error);
+  element.querySelector(".download-feedback-action")?.remove();
+  if (error) {
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "support-contact-link download-feedback-action";
+    action.textContent = "If you want help resolving this, submit this error in Feedback ↗";
+    action.addEventListener("click", () => openFeedbackForm(message, panel.dataset.sourceUrl || ""));
+    element.appendChild(document.createElement("br"));
+    element.appendChild(action);
+  }
 }
 
 function showRunningControls(panel) {
@@ -693,12 +704,42 @@ const feedbackStatus = $("#commentStatus");
 const supportFeedbackButton = $("#supportFeedbackBtn");
 const LOCATION_DECISION_KEY = "savevido_location_decision_v1";
 const LOCATION_PENDING_KEY = "savevido_feedback_location_pending_v1";
-supportFeedbackButton?.addEventListener("click", () => {
-  $("#comment").value = "Url:\nSite/App:\nError:\n\nAdditional details:\n";
+
+function openFeedbackForm(errorMessage = "", sourceUrl = "") {
+  const lines = [
+    "Url: " + (sourceUrl || "Not provided"),
+    "Site/App: SaveVido desktop app",
+    "Error: " + (errorMessage || "Please describe the issue"),
+    "",
+    "Additional details:"
+  ];
+  const comment = $("#comment");
+  if (comment) comment.value = lines.join("\n");
   feedbackForm?.scrollIntoView({ behavior: "smooth", block: "center" });
-  $("#comment")?.focus();
-  if (feedbackStatus) { feedbackStatus.textContent = "Add your name, one contact method, and details before sending."; feedbackStatus.className = "status"; }
-});
+  comment?.focus();
+  if (feedbackStatus) {
+    feedbackStatus.textContent = "Review the error details, add your name and one contact method, then submit Feedback.";
+    feedbackStatus.className = "status";
+  }
+}
+
+function showErrorWithFeedback(error, sourceUrl = "") {
+  let message = String(error || "An unknown error occurred.");
+  if (navigator.onLine === false || /failed to fetch|networkerror|load failed/i.test(message)) {
+    message = "Please connect to the internet and check your connection. If you are already online, the service may be temporarily unavailable. Original detail: " + message;
+  }
+  setStatus(message, "error");
+  if (!statusBox) return;
+  const action = document.createElement("button");
+  action.type = "button";
+  action.className = "support-contact-link";
+  action.textContent = "If you want help resolving this, submit this error in Feedback ↗";
+  action.addEventListener("click", () => openFeedbackForm(message, sourceUrl));
+  statusBox.appendChild(document.createElement("br"));
+  statusBox.appendChild(action);
+}
+
+supportFeedbackButton?.addEventListener("click", () => openFeedbackForm());
 async function requestLocationOnce() {
   if (!new URLSearchParams(window.location.search).has("desktop")) return;
   const prompt = $("#locationConsentPrompt");
@@ -1098,6 +1139,7 @@ historyList?.addEventListener("click", async (event) => {
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(data.error || "Could not resume download.");
       const panel = createDownloadPanel(jobId, itemElement?.querySelector(".history-item-heading strong")?.textContent || "Resuming download...");
+      panel.dataset.sourceUrl = itemElement?.dataset.sourceUrl || "";
       // Close the history drawer so the restored live progress panel is visible.
       setHistoryOpen(false);
       panel.scrollIntoView({ behavior: "auto", block: "center" });
