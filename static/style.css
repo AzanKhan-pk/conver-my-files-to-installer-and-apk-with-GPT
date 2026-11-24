@@ -997,3 +997,9 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
 .location-consent-card{width:min(460px,100%);padding:28px;border:1px solid rgba(184,243,76,.35);border-radius:20px;background:#111722;color:#f4f6fa;box-shadow:0 24px 90px rgba(0,0,0,.5)}
 .location-consent-card h2{margin:8px 0 12px}.location-consent-card p{line-height:1.6;color:#c3c9d4}
 .location-consent-actions{display:flex;gap:12px;margin-top:20px}.location-consent-actions button{min-width:112px}
+
+
+/* Respect hidden attributes on progress elements even when component styles set display. */
+.download-progress-panel [hidden] {
+  display: none !important;
+}

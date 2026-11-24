@@ -480,7 +480,14 @@ async function downloadMedia() {
     });
   } catch (error) {
     console.error("Download start error:", error);
-    setStatus(error.message || "Download failed.", "error");
+    const message = error.message || "Download failed.";
+    const needsLogin = /login|log in|sign.?in|authentication|cookies required|private video|not authorized/i.test(message);
+    setStatus(
+      needsLogin && !useBrowserSession?.checked
+        ? message + " If this is your own account, open More Options, enable Allow browser cookies, and choose your browser. SaveVido reads the selected profile locally only after you opt in."
+        : message,
+      "error"
+    );
   } finally {
     setButtonLoading(downloadButton, false, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "MP4"} ↗`);
   }
