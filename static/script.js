@@ -237,7 +237,7 @@ function renderVideoResult(video) {
       </p>
       <p>${escapeHtml(video.platform)}</p>
       <button id="downloadBtn" type="button">
-        Download ${selectedMode === "audio" ? "MP3" : "MP4"} ↗
+        Download ${selectedMode === "audio" ? "MP3" : "Video"} ↗
       </button>
     </div>
   `;
@@ -426,8 +426,12 @@ fetchButton.addEventListener("click", async () => {
     }
   } catch (error) {
     resultBox.hidden = true;
+    const message = error.message || "Something went wrong.";
+    const needsLogin = /login|log in|sign.?in|authentication|cookies required|private video|not authorized/i.test(message);
     setStatus(
-      error.message || "Something went wrong.",
+      needsLogin && !useBrowserSession?.checked
+        ? message + " If this is your own account, open More Options, enable Allow browser cookies, and choose your browser. SaveVido reads the selected profile locally only after you opt in."
+        : message,
       "error"
     );
   } finally {
@@ -454,7 +458,7 @@ async function downloadMedia() {
     quality: selectedQuality
   };
 
-  setButtonLoading(downloadButton, true, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "MP4"} ↗`);
+  setButtonLoading(downloadButton, true, "Starting...", `Download ${media.mode === "audio" ? "MP3" : "Video"} ↗`);
 
   try {
     const response = await fetch("/api/download", {
@@ -516,7 +520,7 @@ function createDownloadPanel(jobId, title) {
       <strong class="download-progress-title">${escapeHtml(title || "Downloading...")}</strong>
       <span class="download-progress-head-actions">
         <span data-role="percent">0%</span>
-        <button data-action="dismiss" type="button" aria-label="Remove progress panel" title="Remove from active list">×</button>
+        <button data-action="dismiss" type="button" aria-label="Remove progress panel" title="Remove this panel (keeps History)" aria-label="Dismiss completed download">×</button>
       </span>
     </div>
     <div class="download-progress-bar"><div data-role="fill" class="download-progress-fill" style="width:0%"></div></div>
@@ -620,9 +624,16 @@ async function monitorDownload(jobId, panel, media) {
         link.remove();
         setTimeout(() => URL.revokeObjectURL(objectUrl), 5000);
       }
-      setDownloadProgressMessage(panel, isDesktopApp
-        ? `✓ Completed · saved in ${job.file_path || "Downloads\\SaveVido"}`
-        : "✓ Download completed.");
+      // Completed jobs remain in History. Collapse the live panel to the
+      // requested compact state: completion label plus the dismiss cross only.
+      panel.classList.add("is-complete");
+      const titleElement = panel.querySelector(".download-progress-title");
+      if (titleElement) titleElement.textContent = "✓ Download completed";
+      panel.querySelector(".download-progress-bar")?.setAttribute("hidden", "");
+      panel.querySelector(".download-progress-info")?.setAttribute("hidden", "");
+      panel.querySelector(".download-progress-actions")?.setAttribute("hidden", "");
+      panel.querySelector('[data-role="percent"]')?.setAttribute("hidden", "");
+      panel.querySelector('[data-role="message"]')?.setAttribute("hidden", "");
       disableDownloadControls(panel);
       await showCompletedNotification(job);
       await loadDownloadHistory();

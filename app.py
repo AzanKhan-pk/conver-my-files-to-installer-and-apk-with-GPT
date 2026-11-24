@@ -748,11 +748,12 @@ TIKTOK_REQUEST_USER_AGENT = (
 
 
 def apply_site_request_options(url, options):
-    """Apply a conservative site-specific request header for TikTok."""
+    """Use a browser-like TLS/HTTP fingerprint for TikTok via yt-dlp's curl_cffi backend."""
     if platform_for(url) == "TikTok":
-        headers = dict(options.get("http_headers") or {})
-        headers["User-Agent"] = TIKTOK_REQUEST_USER_AGENT
-        options["http_headers"] = headers
+        # curl_cffi is installed through yt-dlp[default]. This is more complete
+        # than changing only the User-Agent header.
+        options["impersonate"] = "chrome"
+        options.pop("http_headers", None)
     return options
 
 
@@ -1201,15 +1202,21 @@ def choose_video_format(info, requested_height):
 
     selector = f"[height<={requested_height}]"
 
+    # Prefer a single muxed format when the source offers one. This keeps
+    # progress totals/speed/ETA stable instead of resetting between separate
+    # video-only and audio-only downloads. Fall back to separate streams only
+    # when the site does not provide a suitable muxed format.
     if FFMPEG_AVAILABLE:
         selected = (
+            f"best{selector}/"
             f"bestvideo{selector}+bestaudio/"
-            f"best{selector}/best"
+            "best"
         )
     else:
         selected = (
             f"best{selector}[acodec!=none]/"
-            "best[acodec!=none][vcodec!=none]/best"
+            f"best[acodec!=none][vcodec!=none]/"
+            "best"
         )
 
     return selected, source_height
@@ -1344,7 +1351,7 @@ def progress_hook(job_id):
 
 def find_output_file(temp_dir, mode):
     accepted_extensions = {".mp3"} if mode == "audio" else {
-        ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".ts", ".flv"
+        ".mp4", ".m4v", ".mkv", ".webm", ".mov", ".ts", ".flv", ".avi", ".3gp", ".m2ts", ".mts", ".ogv"
     }
     candidates = [
         path for path in Path(temp_dir).glob("*")
@@ -1436,9 +1443,7 @@ def run_download_job(job_id):
                 "Quality=%s, selected height=%s", quality, source_height
             )
             options["format"] = selected_format
-            if FFMPEG_AVAILABLE:
-                options["merge_output_format"] = "mp4"
-            file_type = "MP4"
+            file_type = "VIDEO"
 
         options = apply_site_request_options(url, options)
         update_job(job_id, status="downloading")
@@ -1448,6 +1453,9 @@ def run_download_job(job_id):
             downloaded_info = ydl.process_ie_result(info, download=True)
 
         final_path, final_size = find_output_file(temp_dir, mode)
+        # Record the actual output container instead of assuming every source
+        # can be represented as MP4.
+        file_type = "MP3" if mode == "audio" else final_path.suffix.lstrip(".").upper()
         title = downloaded_info.get("title") or title
         # Move the finished media out of the hidden job workspace into the
         # single SaveVido download folder, using the original media title.

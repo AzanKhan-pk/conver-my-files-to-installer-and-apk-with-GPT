@@ -6,28 +6,56 @@ import hashlib
 import json
 import os
 import shutil
+import socket
 import subprocess
 import sys
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import zipfile
 from pathlib import Path, PurePosixPath
 
 
-def fetch(url: str, destination: Path, progress=None) -> None:
-    request = urllib.request.Request(url, headers={"User-Agent": "SaveVido-Updater"})
-    with urllib.request.urlopen(request, timeout=90) as response, destination.open("wb") as output:
-        total = int(response.headers.get("Content-Length") or 0)
-        downloaded = 0
-        while True:
-            chunk = response.read(64 * 1024)
-            if not chunk:
-                break
-            output.write(chunk)
-            downloaded += len(chunk)
-            if progress:
-                progress(downloaded, total)
+def fetch(url: str, destination: Path, progress=None, attempts: int = 3) -> None:
+    """Download release metadata/assets with retryable CDN timeout handling."""
+    request = urllib.request.Request(
+        url,
+        headers={"User-Agent": "SaveVido-Updater", "Cache-Control": "no-cache"},
+    )
+    partial = destination.with_name(destination.name + ".download")
+    last_error = None
+    for attempt in range(attempts):
+        try:
+            partial.unlink(missing_ok=True)
+            with urllib.request.urlopen(request, timeout=180) as response, partial.open("wb") as output:
+                total = int(response.headers.get("Content-Length") or 0)
+                downloaded = 0
+                while True:
+                    chunk = response.read(128 * 1024)
+                    if not chunk:
+                        break
+                    output.write(chunk)
+                    downloaded += len(chunk)
+                    if progress:
+                        progress(downloaded, total)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(partial, destination)
+            return
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code not in {408, 429, 500, 502, 503, 504}:
+                partial.unlink(missing_ok=True)
+                raise
+        except (urllib.error.URLError, TimeoutError, socket.timeout, ConnectionError, OSError) as exc:
+            last_error = exc
+        partial.unlink(missing_ok=True)
+        if attempt + 1 < attempts:
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(
+        f"Could not download update data after {attempts} attempts: {last_error}"
+    ) from last_error
 
 
 def safe_target(root: Path, name: str) -> Path:
