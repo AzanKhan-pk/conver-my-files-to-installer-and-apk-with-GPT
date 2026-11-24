@@ -578,79 +578,97 @@ def strip_ansi(text):
 
 def humanize_error(error):
     message = strip_ansi(str(error)).strip()
-
     if message.startswith("ERROR: "):
         message = message[len("ERROR: "):]
-
     lowered = message.lower()
+
+    if not message:
+        return "An unknown error occurred. Please submit this error in Feedback."
+
+    # Give users an actionable message for local connectivity/DNS failures.
+    if any(term in lowered for term in (
+        "failed to resolve", "name or service not known", "getaddrinfo failed",
+        "temporary failure in name resolution", "name resolution",
+        "network is unreachable", "no internet", "internet connection",
+        "failed to establish a new connection", "max retries exceeded",
+        "connection refused", "connection reset", "connection aborted",
+        "remote end closed connection", "urlopen error",
+    )):
+        return (
+            "Please connect to the internet and check that your connection is working. "
+            "If you are already online, the website may be temporarily unavailable; "
+            "please try again shortly."
+        )
 
     if "unsupported url" in lowered:
         return (
-            "The extractor does not support this URL. "
-            "Allowing a domain does not guarantee that "
-            "yt-dlp can download its media."
+            "This link format is not supported by the current extractor. "
+            "Check that the URL is correct and belongs to a supported platform."
         )
 
-    if "private video" in lowered or (
-        "private" in lowered and "video" in lowered
-    ):
-        return "This media is private and cannot be downloaded."
-
-    if "timed out" in lowered or "timeout" in lowered:
-        return (
-            "The social media site took too long to respond. "
-            "Please try again shortly; the app stopped waiting to avoid a long delay."
-        )
+    if "private video" in lowered or ("private" in lowered and "video" in lowered):
+        return "This media is private. SaveVido can process only content you are authorized to view."
 
     if (
         ("permission denied" in lowered or "unable to open database file" in lowered)
         and ("cookie" in lowered or "cookies" in lowered)
     ):
         return (
-            "The browser's cookie database could not be read. "
-            "Close Chrome completely, then restart the app and try again. "
-            "If it still fails, your browser may restrict access to its cookie store. "
-            "Only use your own authorized account session; never share cookie files."
+            "The browser's cookie database could not be read. Close the selected browser completely, "
+            "then restart SaveVido and try again. You can also choose another supported browser. "
+            "Only use your own authorized account session."
         )
 
-    if any(word in lowered for word in (
-        "login", "sign in", "cookies"
-    )):
+    if any(word in lowered for word in ("login", "sign in", "cookies", "authentication required", "requires authentication")):
         return (
-            "This media requires an authorized session. In the local app, "
-            "enable 'Use my browser session' and try again. If the browser "
-            "cookie database is locked, close the browser and restart the app. "
-            "Use only content your account is allowed to view."
+            "This post requires an authorized account session. In More Options, enable "
+            "'Use my browser session' and choose your browser. SaveVido reads that profile "
+            "locally only after you opt in. It cannot bypass private access."
         )
+
+    if any(term in lowered for term in ("checkpoint", "challenge_required", "challenge page")):
+        return "The platform is requesting an account security check. Complete it in your own browser, then try again later."
+
+    if any(term in lowered for term in ("http error 429", "too many requests", "rate limit")):
+        return "The platform is temporarily limiting requests. Wait a while before trying again."
+
+    if "http error 404" in lowered or "not found" in lowered:
+        return "The requested post or media could not be found. Check the link or confirm that the post is still available."
+
+    if any(term in lowered for term in ("http error 401", "http error 403", "forbidden")):
+        return "The platform denied access to this post. It may require sign-in or may not be available to your account."
+
+    if any(term in lowered for term in ("http error 500", "http error 502", "http error 503", "http error 504", "bad gateway", "service unavailable")):
+        return "The platform's server is temporarily unavailable. Please try again later."
+
+    if "timed out" in lowered or "timeout" in lowered:
+        return (
+            "The platform did not respond before the time limit. Check your internet connection "
+            "and try again shortly. If the problem continues, submit this error in Feedback."
+        )
+
+    if "no space left on device" in lowered or "disk is full" in lowered:
+        return "Your download drive is full. Free some storage space or choose another download folder."
+
+    if any(term in lowered for term in ("access is denied", "permission denied", "read-only file system")):
+        return "SaveVido cannot write to the selected folder. Choose a folder where your Windows account has permission."
 
     if "drm" in lowered:
-        return "This media is DRM-protected."
+        return "This media is DRM-protected and cannot be processed."
 
     if "geo" in lowered and "restrict" in lowered:
-        return "This media is region-restricted."
+        return "This media is region-restricted and is not available from your current location."
 
-    if "video unavailable" in lowered:
+    if "video unavailable" in lowered or "media unavailable" in lowered:
         return "The media is unavailable or the URL is incorrect."
 
-    if (
-        "no video formats" in lowered
-        or "requested format is not available" in lowered
-    ):
-        return (
-            "No suitable media format was found. "
-            "Try another quality."
-        )
+    if "no video formats" in lowered or "requested format is not available" in lowered:
+        return "No compatible format is available for this post. Try another quality or format."
 
     if "ffprobe" in lowered or "ffmpeg" in lowered:
-        return (
-            "FFmpeg could not process this media. "
-            "Check the server installation."
-        )
+        return "FFmpeg could not process this media. Restart SaveVido and try again; if it continues, submit the error in Feedback."
 
-    if not message:
-        return "An unknown error occurred."
-
-    return message[:300]
+    return message[:400]
 def is_network_error(error):
     message = str(error).lower()
     return any(item in message for item in (
@@ -1031,7 +1049,8 @@ def run_gallery_dl_urls(url, browser_cookies=None):
         # Pinterest pages can respond more slowly than other public sources.
         # Give its extractor a little more time without allowing an unlimited wait.
         extraction_timeout = (
-            18 if source_platform in {"Facebook", "Instagram"}
+            35 if source_platform == "Instagram"
+            else 25 if source_platform == "Facebook"
             else 60 if source_platform == "Pinterest"
             else 35
         )
@@ -1044,8 +1063,15 @@ def run_gallery_dl_urls(url, browser_cookies=None):
         )
     except subprocess.TimeoutExpired as error:
         app.logger.warning("gallery-dl timed out for %s: %s", source_platform, error)
+        if source_platform == "Instagram":
+            raise TimeoutError(
+                "Instagram did not respond within 35 seconds while loading this image post. "
+                "Check your internet connection and try again. If the post is visible only "
+                "after sign-in, enable 'Use my browser session' in More Options and use "
+                "your own authorized browser profile."
+            ) from error
         raise TimeoutError(
-            f"{source_platform} image extraction timed out after the short response window."
+            f"{source_platform} image extraction timed out. Check your internet connection and try again shortly."
         ) from error
     except OSError as error:
         app.logger.warning("gallery-dl could not process %s: %s", source_platform, error)
