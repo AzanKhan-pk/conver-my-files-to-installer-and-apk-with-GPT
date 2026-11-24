@@ -589,7 +589,7 @@ def humanize_error(error):
     if any(term in lowered for term in (
         "failed to resolve", "name or service not known", "getaddrinfo failed",
         "temporary failure in name resolution", "name resolution",
-        "network is unreachable", "no internet", "internet connection",
+        "network is unreachable", "no internet",
         "failed to establish a new connection", "max retries exceeded",
         "connection refused", "connection reset", "connection aborted",
         "remote end closed connection", "urlopen error",
@@ -640,6 +640,14 @@ def humanize_error(error):
 
     if any(term in lowered for term in ("http error 500", "http error 502", "http error 503", "http error 504", "bad gateway", "service unavailable")):
         return "The platform's server is temporarily unavailable. Please try again later."
+
+    if "instagram" in lowered and ("timed out" in lowered or "timeout" in lowered or "did not respond" in lowered):
+        return (
+            "Instagram did not respond while loading this post. This can be a temporary Instagram issue, "
+            "a connection problem, or an access/login requirement. Check that other websites load; "
+            "if this post requires sign-in, opt in to Use my browser session with your own account. "
+            "Otherwise, wait and retry. If it keeps happening, submit this error in Feedback."
+        )
 
     if "timed out" in lowered or "timeout" in lowered:
         return (
@@ -1072,10 +1080,10 @@ def run_gallery_dl_urls(url, browser_cookies=None):
         app.logger.warning("gallery-dl timed out for %s: %s", source_platform, error)
         if source_platform == "Instagram":
             raise TimeoutError(
-                "Instagram did not respond within 35 seconds while loading this image post. "
-                "Check your internet connection and try again. If the post is visible only "
-                "after sign-in, enable 'Use my browser session' in More Options and use "
-                "your own authorized browser profile."
+                "Instagram image extraction timed out after 35 seconds. The platform may be slow, "
+                "your connection may be interrupted, or the post may require sign-in. "
+                "If sign-in is required, opt in to 'Use my browser session' in More Options "
+                "and use your own authorized browser profile."
             ) from error
         raise TimeoutError(
             f"{source_platform} image extraction timed out. Check your internet connection and try again shortly."
