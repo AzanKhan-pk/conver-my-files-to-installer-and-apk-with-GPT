@@ -38,7 +38,7 @@ useBrowserSession?.addEventListener("change", () => {
   if (browserProfileWrap) browserProfileWrap.hidden = !useBrowserSession.checked;
   if (useBrowserSession.checked) {
     setStatus(
-      "Your selected browser profile will be read locally by this desktop app only. Do not enable this on a shared computer.",
+      "SaveVido will try public media without cookies first and read your selected browser profile only if sign-in is required. This stays local to this desktop app.",
       "success"
     );
   }
