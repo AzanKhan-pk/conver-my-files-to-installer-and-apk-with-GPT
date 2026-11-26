@@ -631,7 +631,19 @@ def base_ydl_options(browser_cookies=None):
     if Path(cookies_path).is_file():
         options["cookiefile"] = cookies_path
     if browser_cookies:
-        options["cookiesfrombrowser"] = (browser_cookies,)
+        # Accept the saved browser choice and optional profile name. yt-dlp
+        # expects (browser, profile, keyring, container) for explicit profiles.
+        if isinstance(browser_cookies, dict):
+            browser_name = str(browser_cookies.get("browser") or "").lower()
+            profile = str(browser_cookies.get("profile") or "").strip() or None
+            options["cookiesfrombrowser"] = (
+                (browser_name, profile, None, None)
+                if profile
+                else (browser_name,)
+            )
+        else:
+            # Backward compatibility for previously saved jobs.
+            options["cookiesfrombrowser"] = (browser_cookies,)
 
     return options
 
@@ -646,9 +658,20 @@ def requested_browser_session(payload, url):
     if not is_public_source_host(host):
         raise ValueError("Browser cookies can only be used with public websites.")
     browser = str(payload.get("browser") or "chrome").lower()
-    if browser not in {"chrome", "edge", "firefox"}:
-        raise ValueError("Choose Chrome, Edge, or Firefox.")
-    return browser
+    supported_browsers = {
+        "brave", "chrome", "chromium", "edge",
+        "firefox", "opera", "safari", "vivaldi",
+    }
+    if browser not in supported_browsers:
+        raise ValueError("Choose a supported browser for your local session.")
+
+    profile = str(payload.get("browser_profile") or "").strip()
+    if len(profile) > 160 or any(ord(character) < 32 for character in profile):
+        raise ValueError("Browser profile name is invalid.")
+
+    # Profile names such as "Default" or "Profile 1" are optional. When
+    # omitted, each extractor selects its own most recently used profile.
+    return {"browser": browser, "profile": profile or None}
 
 
 TIKTOK_REQUEST_USER_AGENT = (
@@ -700,6 +723,31 @@ def extract_info_with_retry(url, download=False, options=None):
                 return ydl.extract_info(
                     retry_url, download=download
                 )
+
+        # yt-dlp normally chooses a site-specific extractor automatically.
+        # If that extractor rejects a URL format, make one bounded attempt
+        # with its Generic extractor to inspect embedded media/JSON-LD.
+        # Generic extraction is already enabled in the normal extractor set;
+        # forcing it here is a fallback, not a replacement for native support.
+        if any(term in str(error).lower() for term in (
+            "unsupported url",
+            "unsupported by the current extractor",
+            "no suitable extractor",
+        )):
+            try:
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    return ydl.extract_info(
+                        url,
+                        download=download,
+                        force_generic_extractor=True,
+                    )
+            except Exception as generic_error:
+                app.logger.info(
+                    "Generic extractor fallback also failed for %s: %s",
+                    urlparse(url).hostname,
+                    generic_error,
+                )
+                raise generic_error from error
 
         raise
 
@@ -935,10 +983,22 @@ def run_gallery_dl_urls(url, browser_cookies=None):
     # Browser cookies are used only after an explicit per-request opt-in
     # from the local desktop app. Never read a server/developer session.
     if browser_cookies:
-        allowed_browsers = {"chrome", "edge", "firefox"}
-        if browser_cookies not in allowed_browsers:
-            raise ValueError("Choose Chrome, Edge, or Firefox for local session access.")
-        command.extend(["--cookies-from-browser", browser_cookies])
+        if isinstance(browser_cookies, dict):
+            browser_name = str(browser_cookies.get("browser") or "").lower()
+            profile = str(browser_cookies.get("profile") or "").strip()
+            browser_spec = browser_name + (":" + profile if profile else "")
+        else:
+            # Backward compatibility for jobs created by earlier versions.
+            browser_spec = str(browser_cookies)
+
+        allowed_browsers = {
+            "brave", "chrome", "chromium", "edge",
+            "firefox", "opera", "safari", "vivaldi",
+        }
+        browser_name = browser_spec.split(":", 1)[0].lower()
+        if browser_name not in allowed_browsers:
+            raise ValueError("Choose a supported browser for local session access.")
+        command.extend(["--cookies-from-browser", browser_spec])
 
     urls = [url] if isinstance(url, str) else list(url)
     command.extend(urls)
