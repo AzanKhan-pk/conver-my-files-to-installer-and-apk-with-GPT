@@ -489,10 +489,17 @@ def humanize_error(error):
             "please try again shortly."
         )
 
-    if "unsupported url" in lowered:
+    if (
+        "unsupported url" in lowered
+        or "unsupported by the current extractor" in lowered
+        or "no suitable extractor" in lowered
+    ):
         return (
-            "This link format is not supported by the current extractor. "
-            "Check that the URL is correct and belongs to a supported platform."
+            "yt-dlp could not identify a usable extractor for this page. SaveVido tried "
+            "its automatic generic-extractor fallback too. The site may not be included "
+            "in yt-dlp, the URL may be a player/page link, or the site's page format may "
+            "have changed. Try the site's official video/share link and submit this error "
+            "in Feedback if it continues."
         )
 
     if "private video" in lowered or ("private" in lowered and "video" in lowered):
