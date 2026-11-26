@@ -157,7 +157,7 @@
   <!-- Styles -->
   <link
     rel="stylesheet"
-    href="{{ url_for('static', filename='style.css') }}?v=20261124-feedback-contrast-2"
+    href="{{ url_for('static', filename='style.css') }}?v=20261126-auto-cookie-1"
   >
 
   <!-- Structured Data -->
@@ -634,12 +634,29 @@
             </label>
 
             <label id="browserChoiceWrap" hidden>
-              Browser profile
+              Browser
               <select id="browserChoice">
                 <option value="chrome">Google Chrome</option>
                 <option value="edge">Microsoft Edge</option>
                 <option value="firefox">Firefox</option>
+                <option value="brave">Brave</option>
+                <option value="chromium">Chromium</option>
+                <option value="opera">Opera</option>
+                <option value="vivaldi">Vivaldi</option>
+                <option value="safari">Safari (macOS)</option>
               </select>
+            </label>
+
+            <label id="browserProfileWrap" hidden>
+              Browser profile (optional)
+              <input
+                id="browserProfile"
+                type="text"
+                maxlength="160"
+                placeholder="Default or Profile 1"
+                autocomplete="off"
+              >
+              <small>Leave blank to use the browser's most recently used profile. If cookies cannot be read, fully close that browser and try again.</small>
             </label>
 
             <label class="download-location-label">
@@ -1426,7 +1443,7 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261124-error-feedback-1"
+    src="{{ url_for('static', filename='script.js') }}?v=20261126-auto-cookie-1"
   ></script>
   <script src="{{ url_for('static', filename='update.js') }}?v=1" defer></script>
 
