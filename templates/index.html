@@ -157,7 +157,7 @@
   <!-- Styles -->
   <link
     rel="stylesheet"
-    href="{{ url_for('static', filename='style.css') }}?v=20261126-auto-cookie-1"
+    href="{{ url_for('static', filename='style.css') }}?v=20261126-lazy-cookie-2"
   >
 
   <!-- Structured Data -->
@@ -629,7 +629,7 @@
               >
               <span>
                 <strong>Use my browser session (optional)</strong>
-                <small>If a supported site asks you to sign in, enable this to let the local desktop app read that site's cookies from your selected browser profile. Cookies stay on this device and are never uploaded. Only use your own authorized account.</small>
+                <small>If a supported site asks you to sign in, enable this. SaveVido first tries the public link without cookies and reads your selected browser profile only if the extractor reports that a session is required. Cookies stay on this device and are never uploaded. Only use your own authorized account.</small>
               </span>
             </label>
 
@@ -656,7 +656,7 @@
                 placeholder="Default or Profile 1"
                 autocomplete="off"
               >
-              <small>Leave blank to use the browser's most recently used profile. If cookies cannot be read, fully close that browser and try again.</small>
+              <small>Leave blank to use the browser's most recently used profile. Cookies are accessed only if needed. If the browser database cannot be read, fully close that browser and try again.</small>
             </label>
 
             <label class="download-location-label">
