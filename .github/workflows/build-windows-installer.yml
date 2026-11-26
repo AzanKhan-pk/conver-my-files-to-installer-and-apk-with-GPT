@@ -397,8 +397,27 @@ jobs:
           $tag = "v$version"
           $assets = @("release/SaveVido-Setup.exe", "release/SaveVido-Update-Manifest.json")
           if (Test-Path "release/SaveVido-Update.zip") { $assets += "release/SaveVido-Update.zip" }
-          gh release create $tag @assets --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "SaveVido $version" --notes "SaveVido Windows installer and, when available, a verified changed-files updater. Requires Windows 10 or Windows 11."
-          if ($LASTEXITCODE -ne 0) { throw "GitHub Release creation failed." }
+          # A previous publish attempt may have created the release but failed
+          # while updating the website manifest. Reuse that release instead of
+          # failing on "a release with the same tag name already exists".
+          gh release view $tag --repo "$env:GITHUB_REPOSITORY" --json tagName *> $null
+          if ($LASTEXITCODE -eq 0) {
+            Write-Host "Release $tag already exists; updating its assets idempotently."
+            gh release upload $tag @assets --repo "$env:GITHUB_REPOSITORY" --clobber
+          } else {
+            gh release create $tag @assets --repo "$env:GITHUB_REPOSITORY" --target "$env:GITHUB_SHA" --title "SaveVido $version" --notes "SaveVido Windows installer and, when available, a verified changed-files updater. Requires Windows 10 or Windows 11."
+          }
+          if ($LASTEXITCODE -ne 0) { throw "GitHub Release create/upload failed." }
+
+          # Verify every expected asset exists before publishing the website URL.
+          $remoteAssets = gh release view $tag --repo "$env:GITHUB_REPOSITORY" --json assets --jq '.assets[].name'
+          if ($LASTEXITCODE -ne 0) { throw "Could not verify GitHub Release assets." }
+          foreach ($asset in $assets) {
+            $assetName = [System.IO.Path]::GetFileName($asset)
+            if ($remoteAssets -notcontains $assetName) {
+              throw "Release asset missing after upload: $assetName"
+            }
+          }
 
           $sha256 = (Get-FileHash "release/SaveVido-Setup.exe" -Algorithm SHA256).Hash.ToLower()
           python -c "import json,sys,os; from datetime import datetime,timezone; p='platform/release-config.json'; d=json.load(open(p,encoding='utf-8')); v=sys.argv[1]; h=sys.argv[2]; d['current_version']=v; d['updated_at']=datetime.now(timezone.utc).isoformat().replace('+00:00','Z'); d['update_service']['status']='Latest Windows release published automatically from GitHub commits.'; w=d['channels']['windows']; w['version']=v; w['status']='Available: latest verified Windows installer.'; w['download_url']='https://github.com/'+os.getenv('GITHUB_REPOSITORY','AzanKhan-pk/conver-my-files-to-installer-and-apk-with-GPT')+'/releases/download/v'+v+'/SaveVido-Setup.exe'; w['sha256']=h; json.dump(d,open(p,'w',encoding='utf-8'),ensure_ascii=False,indent=2); print('Website manifest updated:',v)" $version $sha256
