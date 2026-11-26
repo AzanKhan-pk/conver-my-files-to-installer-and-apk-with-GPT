@@ -6,6 +6,8 @@ import sys
 import smtplib
 import sqlite3
 import json
+import ipaddress
+import socket
 import mimetypes
 import tempfile
 import threading
@@ -133,145 +135,6 @@ QUALITY_HEIGHTS = {
     "4K": 2160,
 }
 
-
-
-ALLOWED_HOSTS = {
-    # YouTube
-    "youtube.com", "www.youtube.com", "m.youtube.com",
-    "youtu.be", "youtube-nocookie.com",
-    "www.youtube-nocookie.com",
-    "ytimg.com", "i.ytimg.com", "img.youtube.com",
-    "googlevideo.com",
-
-    # TikTok
-    "tiktok.com", "www.tiktok.com",
-    "vm.tiktok.com", "vt.tiktok.com",
-    "tiktokcdn.com", "tiktokv.com",
-    "tiktokcdn-us.com", "muscdn.com",
-    "byteoversea.com",
-
-    # Instagram
-    "instagram.com", "www.instagram.com",
-    "cdninstagram.com", "scontent.cdninstagram.com",
-    "fbcdn.net",
-
-    # Facebook
-    "facebook.com", "www.facebook.com",
-    "m.facebook.com", "fb.watch",
-    "fbsbx.com", "video.xx.fbcdn.net",
-
-    # X / Twitter
-    "twitter.com", "www.twitter.com",
-    "x.com", "www.x.com",
-    "twimg.com", "pbs.twimg.com",
-    "video.twimg.com",
-
-    # Reddit
-    "reddit.com", "www.reddit.com",
-    "old.reddit.com", "new.reddit.com",
-    "v.redd.it", "redd.it",
-    "redditmedia.com", "redditstatic.com",
-    "preview.redd.it",
-
-    # Vimeo
-    "vimeo.com", "www.vimeo.com",
-    "player.vimeo.com",
-    "i.vimeocdn.com", "vod-progressive.akamaized.net",
-
-    # Dailymotion
-    "dailymotion.com", "www.dailymotion.com",
-    "dai.ly", "dmcdn.net", "s1.dmcdn.net",
-
-    # Twitch
-    "twitch.tv", "www.twitch.tv",
-    "m.twitch.tv", "clips.twitch.tv",
-    "ttvnw.net", "jtvnw.net",
-    "twitchcdn.net",
-
-    # SoundCloud
-    "soundcloud.com", "www.soundcloud.com",
-    "snd.sc", "sndcdn.com",
-
-    # Bilibili
-    "bilibili.com", "www.bilibili.com",
-    "b23.tv", "hdslb.com", "bilivideo.com",
-
-    # Pinterest
-    "pinterest.com", "www.pinterest.com",
-    "pin.it", "www.pin.it",
-    "i.pinimg.com", "images.pinimg.com",
-    "v.pinimg.com",
-
-    # Darkero
-    "darkero.co", "www.darkero.co",
-    "darkero.com", "www.darkero.com",
-    "files.darkero.com",
-
-    # Baddielatina
-    "baddielatina.com", "www.baddielatina.com",
-    "files.baddielatina.com",
-
-    # Pornhub
-    "pornhub.com", "www.pornhub.com",
-    "m.pornhub.com", "pornhub.org",
-    "pornhubpremium.com", "phncdn.com",
-    "www.phncdn.com", "ci.phncdn.com",
-    "ei.phncdn.com", "di.phncdn.com",
-    "thumbs.phncdn.com",
-
-    # XNXX
-    "xnxx.com", "www.xnxx.com",
-    "m.xnxx.com", "xnxx.tv",
-    "xnxx.health", "xnxx-cdn.com",
-
-    # XVideos
-    "xvideos.com", "www.xvideos.com",
-    "xvideos.red", "xvideos-cdn.com",
-
-    # Xhamster
-    "xhamster.com", "www.xhamster.com",
-    "xhamster.desi", "xhcdn.com",
-
-    # XVideos-style media hosting
-    "xv-cdn.com",
-
-    # Stripchat
-    "stripchat.com", "www.stripchat.com",
-    "static.stripchat.com",
-
-    # RedTube
-    "redtube.com", "www.redtube.com",
-
-    # YouPorn
-    "youporn.com", "www.youporn.com",
-
-    # SpankBang
-    "spankbang.com", "www.spankbang.com",
-
-    # Eporner
-    "eporner.com", "www.eporner.com",
-
-    # Tube8
-    "tube8.com", "www.tube8.com",
-
-    # TNAFlix
-    "tnaflix.com", "www.tnaflix.com",
-
-    # Image hosting
-    "imgur.com", "i.imgur.com",
-    "imagebam.com", "imageshack.com",
-    "postimg.cc", "postimages.org",
-
-    # Common CDN / media hosting
-    "cloudinary.com",
-    "res.cloudinary.com",
-    "akamaized.net",
-    "akamaihd.net",
-    "cloudfront.net",
-    "fastly.net",
-    "cdn.jsdelivr.net",
-    "images.unsplash.com",
-}
 
 
 DOWNLOAD_JOBS = {}
@@ -459,6 +322,38 @@ def send_notification(subject, body):
         )
 
 
+def is_public_source_host(host):
+    """Allow any public website hostname; yt-dlp chooses its extractor automatically.
+
+    Reject local/private destinations so arbitrary URLs cannot target this PC
+    or private network services through the local desktop API.
+    """
+    if not host or host in {"localhost", "localhost.localdomain"}:
+        return False
+    if host.endswith((".localhost", ".local", ".lan", ".internal", ".home", ".test")):
+        return False
+
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        # A single-label host is normally a local network name, not a public site.
+        if "." not in host:
+            return False
+        try:
+            resolved = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        except OSError as error:
+            raise ValueError(
+                "Could not resolve this website. Please check your internet connection and URL."
+            ) from error
+        addresses = {
+            ipaddress.ip_address(item[4][0].split("%", 1)[0])
+            for item in resolved
+        }
+        return bool(addresses) and all(item.is_global for item in addresses)
+
+    return address.is_global
+
+
 def clean_url(value):
     value = (value or "").strip()
 
@@ -483,17 +378,11 @@ def clean_url(value):
     if host in {"localhost", "localhost.localdomain"}:
         raise ValueError("Please enter a public website URL.")
 
-    # Exact domain-boundary matching prevents lookalike hosts such as
-    # youtube.com.example.org from being treated as YouTube.
-    # yt-dlp selects the matching extractor automatically. SaveVido still
-    # limits accepted source hosts to its maintained general-purpose host list.
-    safe_host = any(
-        host == domain or host.endswith("." + domain)
-        for domain in ALLOWED_HOSTS
-    )
-    if not safe_host:
+    # yt-dlp has hundreds of extractors and selects one from the URL itself.
+    # Do not require SaveVido to maintain a per-site host list.
+    if not is_public_source_host(host):
         raise ValueError(
-            f"This platform is not enabled in SaveVido: {host}"
+            "Please enter a public website URL. Local or private-network addresses are not supported."
         )
 
     return value
@@ -747,21 +636,15 @@ def base_ydl_options(browser_cookies=None):
     return options
 
 
-SAFE_BROWSER_COOKIE_HOSTS = {
-    "youtube.com", "youtu.be", "tiktok.com", "instagram.com",
-    "facebook.com", "fb.watch", "x.com", "twitter.com", "reddit.com",
-    "redd.it", "vimeo.com", "dailymotion.com", "dai.ly",
-    "twitch.tv", "soundcloud.com", "bilibili.com", "pinterest.com", "pin.it",
-}
 def requested_browser_session(payload, url):
-    """Read a browser profile only after explicit local opt-in on supported platforms."""
+    """Read the selected local browser profile only after explicit opt-in."""
     if payload.get("use_browser_session") is not True:
         return None
     if request.remote_addr not in {"127.0.0.1", "::1", "localhost"}:
         raise PermissionError("Browser cookies are available only in the local desktop app.")
     host = (urlparse(url).hostname or "").lower().removeprefix("www.")
-    if not any(host == domain or host.endswith("." + domain) for domain in SAFE_BROWSER_COOKIE_HOSTS):
-        raise ValueError("Browser cookies are not enabled for this website.")
+    if not is_public_source_host(host):
+        raise ValueError("Browser cookies can only be used with public websites.")
     browser = str(payload.get("browser") or "chrome").lower()
     if browser not in {"chrome", "edge", "firefox"}:
         raise ValueError("Choose Chrome, Edge, or Firefox.")
