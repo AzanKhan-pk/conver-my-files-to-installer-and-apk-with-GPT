@@ -471,6 +471,9 @@ def humanize_error(error):
         message = message[len("ERROR: "):]
     lowered = message.lower()
 
+    if "please allow cookies from advanced" in lowered:
+        return "This media requires an authorized browser session. Please allow cookies from Advanced options (Use my browser session), then fetch the link again."
+
     if not message:
         return "An unknown error occurred. Please submit this error in Feedback."
 
@@ -1131,18 +1134,50 @@ def get_gallery_image_urls(url, browser_cookies=None):
     )
 
 
+def is_authentication_required(error):
+    """Detect explicit sign-in/session failures, not ordinary extractor errors."""
+    message = str(error).lower()
+    return any(term in message for term in (
+        "login required", "login_required", "redirect to login",
+        "authentication required", "requires authentication",
+        "cookies are needed", "cookies required", "please log in",
+        "sign in to confirm", "private video",
+    ))
+
+
 def get_media_info(url, browser_cookies=None):
-    # Fetch metadata with a short, bounded network wait. Keep the more
-    # resilient defaults for the actual download operation.
-    options = base_ydl_options(browser_cookies=browser_cookies)
+    # First try without browser cookies even when the checkbox is enabled.
+    # Many public links (including ordinary TikTok videos) do not need a
+    # session, and opening Chrome's locked cookie database would break them.
+    options = base_ydl_options()
     options.update({
-        # Fetch is a preview operation: do not spend a long time retrying
-        # an unresponsive social site. Actual downloads keep base retries.
         "retries": 1,
         "extractor_retries": 1,
         "socket_timeout": 18,
     })
-    return extract_info_with_retry(url, download=False, options=options)
+    try:
+        return extract_info_with_retry(url, download=False, options=options)
+    except Exception as error:
+        if not is_authentication_required(error):
+            raise
+        if not browser_cookies:
+            raise ValueError(
+                "This media requires an authorized browser session. Please allow cookies from Advanced options (Use my browser session), then fetch the link again."
+            ) from error
+
+    # Only when the extractor explicitly reports a login/session requirement
+    # do we read the selected browser profile. This is a genuine yt-dlp
+    # cookiesfrombrowser retry, using the profile the user selected.
+    cookie_options = base_ydl_options(browser_cookies=browser_cookies)
+    cookie_options.update({
+        "retries": 1,
+        "extractor_retries": 1,
+        "socket_timeout": 18,
+    })
+    info = extract_info_with_retry(url, download=False, options=cookie_options)
+    if isinstance(info, dict):
+        info["__savevido_cookie_session_used"] = True
+    return info
 
 
 def format_duration(info):
@@ -1407,10 +1442,18 @@ def run_download_job(job_id):
         update_job(job_id, status="preparing", error=None)
         browser_cookies = job.get("browser_cookies")
         info = get_media_info(url, browser_cookies=browser_cookies)
+        # The cookie retry marker is internal metadata; remove it before
+        # passing the extractor result into yt-dlp's download pipeline.
+        cookie_session_used = bool(info.pop("__savevido_cookie_session_used", False))
         title = info.get("title") or "video"
         update_job(job_id, title=title)
 
-        options = base_ydl_options(browser_cookies=browser_cookies)
+        # Do not reopen the browser database during download if public metadata
+        # was successfully fetched without cookies. Reuse cookies only if the
+        # metadata request genuinely needed the authorized session.
+        options = base_ydl_options(
+            browser_cookies=browser_cookies if cookie_session_used else None
+        )
         options.update({
             "outtmpl": str(temp_dir / "%(id)s.%(ext)s"),
             "progress_hooks": [progress_hook(job_id)],
