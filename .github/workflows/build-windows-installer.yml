@@ -66,6 +66,14 @@ jobs:
           python -m py_compile app.py desktop_launcher.py updater.py
           if ($LASTEXITCODE -ne 0) { throw "Python source compile check failed." }
 
+      - name: Verify yt-dlp extractor registry and browser cookie profiles
+        shell: pwsh
+        run: |
+          python -c "import yt_dlp; from yt_dlp.extractor import list_extractor_classes; classes=list(list_extractor_classes()); assert len(classes)>500, 'Extractor registry appears incomplete'; assert any(item.ie_key() == 'Generic' for item in classes), 'Generic extractor is missing'; print('yt-dlp ' + yt_dlp.version.__version__ + ' loaded ' + str(len(classes)) + ' extractor classes including Generic')"
+          if ($LASTEXITCODE -ne 0) { throw "yt-dlp extractor registry check failed." }
+          python -c "import app; options=app.base_ydl_options({'browser':'edge','profile':'Profile 1'}); assert options['cookiesfrombrowser']==('edge','Profile 1',None,None); print('Browser-profile cookie option check passed')"
+          if ($LASTEXITCODE -ne 0) { throw "Browser-profile cookie option check failed." }
+
       - name: Verify Qt WebEngine imports
         shell: pwsh
         run: |
