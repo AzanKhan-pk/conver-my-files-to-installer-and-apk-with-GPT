@@ -11,6 +11,7 @@ const statusBox = $("#status");
 const resultBox = $("#result");
 const useBrowserSession = $("#useBrowserSession");
 const browserChoice = $("#browserChoice");
+const browserProfile = $("#browserProfile");
 const browserChoiceWrap = $("#browserChoiceWrap");
 const accountLink = $("#accountLink");
 if (accountLink && new URLSearchParams(window.location.search).has("desktop")) {
@@ -26,7 +27,8 @@ let currentImagePlatform = "";
 function getImageSessionOptions() {
   return {
     use_browser_session: Boolean(useBrowserSession?.checked),
-    browser: browserChoice?.value || "chrome"
+    browser: browserChoice?.value || "chrome",
+    browser_profile: browserProfile?.value?.trim() || ""
   };
 }
 
