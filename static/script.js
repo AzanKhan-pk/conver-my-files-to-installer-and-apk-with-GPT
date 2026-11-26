@@ -13,6 +13,7 @@ const useBrowserSession = $("#useBrowserSession");
 const browserChoice = $("#browserChoice");
 const browserProfile = $("#browserProfile");
 const browserChoiceWrap = $("#browserChoiceWrap");
+const browserProfileWrap = $("#browserProfileWrap");
 const accountLink = $("#accountLink");
 if (accountLink && new URLSearchParams(window.location.search).has("desktop")) {
   accountLink.addEventListener("click", (event) => { event.preventDefault(); window.location.href = "savevido://account"; });
@@ -34,6 +35,7 @@ function getImageSessionOptions() {
 
 useBrowserSession?.addEventListener("change", () => {
   if (browserChoiceWrap) browserChoiceWrap.hidden = !useBrowserSession.checked;
+  if (browserProfileWrap) browserProfileWrap.hidden = !useBrowserSession.checked;
   if (useBrowserSession.checked) {
     setStatus(
       "Your selected browser profile will be read locally by this desktop app only. Do not enable this on a shared computer.",
