@@ -990,15 +990,15 @@ def run_gallery_dl_urls(url, browser_cookies=None):
         "--get-urls",
     ]
 
-    # Browser cookies are used only after an explicit per-request opt-in
-    # from the local desktop app. Never read a server/developer session.
+    # Prepare the selected browser profile, but do not open its cookie
+    # database unless gallery-dl reports that the page requires a session.
+    browser_spec = None
     if browser_cookies:
         if isinstance(browser_cookies, dict):
             browser_name = str(browser_cookies.get("browser") or "").lower()
             profile = str(browser_cookies.get("profile") or "").strip()
             browser_spec = browser_name + (":" + profile if profile else "")
         else:
-            # Backward compatibility for jobs created by earlier versions.
             browser_spec = str(browser_cookies)
 
         allowed_browsers = {
@@ -1008,7 +1008,6 @@ def run_gallery_dl_urls(url, browser_cookies=None):
         browser_name = browser_spec.split(":", 1)[0].lower()
         if browser_name not in allowed_browsers:
             raise ValueError("Choose a supported browser for local session access.")
-        command.extend(["--cookies-from-browser", browser_spec])
 
     urls = [url] if isinstance(url, str) else list(url)
     command.extend(urls)
@@ -1053,6 +1052,34 @@ def run_gallery_dl_urls(url, browser_cookies=None):
             result.returncode,
             diagnostic[-1200:],
         )
+
+    auth_terms = (
+        "redirect to login", "login required", "login_required",
+        "authentication required", "requires authentication",
+        "cookies are needed", "cookies required", "please log in",
+        "sign in to confirm", "private video",
+    )
+    if browser_spec and any(term in diagnostic.lower() for term in auth_terms):
+        # Retry once with the explicitly selected browser profile.
+        cookie_command = command[:-len(urls)] + [
+            "--cookies-from-browser", browser_spec
+        ] + urls
+        try:
+            cookie_result = subprocess.run(
+                cookie_command,
+                capture_output=True,
+                text=True,
+                timeout=extraction_timeout,
+                check=False,
+            )
+            result = cookie_result
+            diagnostic = (result.stderr or "") + "\n" + (result.stdout or "")
+        except (subprocess.TimeoutExpired, OSError) as error:
+            app.logger.warning("gallery-dl cookie retry failed for %s: %s", source_platform, error)
+            raise RuntimeError(
+                "This post requires browser cookies, but the selected browser session could not be read. "
+                "Close the browser completely, then retry. If it continues, choose another supported profile."
+            ) from error
 
     image_urls = []
     for line in result.stdout.splitlines():
