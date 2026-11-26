@@ -37,7 +37,10 @@ jobs:
     steps:
       - name: Check out source
         uses: actions/checkout@v4
-        # Use the automatic workflow token for checkout; a PAT is optional and only used for release publishing.
+        with:
+          # Optional owner-created token avoids integration-token release restrictions
+          # and is also used for the manifest push below.
+          token: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -293,7 +296,7 @@ jobs:
       - name: Prepare changed-files update package
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
         run: |
           $ErrorActionPreference = "Stop"
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
@@ -378,8 +381,18 @@ jobs:
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
         run: |
+          # Prefer a repository owner-created token when configured. The default
+          # # GITHUB_TOKEN is permitted only if repository/org Actions settings allow
+          # # contents: write; otherwise GitHub returns 403 Resource not accessible.
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+            $env:GH_TOKEN = $env:GITHUB_TOKEN
+          }
+          if ([string]::IsNullOrWhiteSpace($env:GH_TOKEN)) {
+            throw "Release token is missing. Configure SAVEVIDO_RELEASE_TOKEN or enable GITHUB_TOKEN contents: write."
+          }
+
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
           $tag = "v$version"
           $assets = @("release/SaveVido-Setup.exe", "release/SaveVido-Update-Manifest.json")
