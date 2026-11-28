@@ -419,11 +419,12 @@ def main():
     else:
         QMessageBox.warning(window, "SaveVido", "The system tray is unavailable. SaveVido will remain open in its app window.")
     window.show()
-    if savevido_app.TELEMETRY_ENABLED or savevido_app.TELEMETRY_ACTIVITY_ENABLED:
-        heartbeat = QTimer(qt_app)
-        heartbeat.setInterval(5 * 60 * 1000)
-        heartbeat.timeout.connect(lambda: savevido_app.send_telemetry("app_heartbeat"))
-        heartbeat.start()
+    # The timer is always available; send_telemetry itself checks consent.
+    # A user who opts into activity sharing in-app can begin immediately.
+    heartbeat = QTimer(qt_app)
+    heartbeat.setInterval(5 * 60 * 1000)
+    heartbeat.timeout.connect(lambda: savevido_app.send_telemetry("app_heartbeat"))
+    heartbeat.start()
     timer = QTimer(qt_app)
     timer.setInterval(6 * 60 * 60 * 1000)
     timer.timeout.connect(lambda: window.check_updates(silent=True))

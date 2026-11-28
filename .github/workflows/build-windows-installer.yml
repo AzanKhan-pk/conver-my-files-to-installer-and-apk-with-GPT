@@ -40,7 +40,7 @@ jobs:
         with:
           # Optional owner-created token avoids integration-token release restrictions
           # and is also used for the manifest push below.
-          token: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          token: ${{ github.token }}
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -296,7 +296,7 @@ jobs:
       - name: Prepare changed-files update package
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           $ErrorActionPreference = "Stop"
           $version = "1.0.$env:GITHUB_RUN_NUMBER"
@@ -378,10 +378,21 @@ jobs:
           }
           $manifest | ConvertTo-Json -Depth 10 | Set-Content $manifestPath -Encoding utf8
           Write-Host "Update manifest created: $($fileEntries.Count) tracked files; $($changed.Count) changed files."
+      - name: Upload installer and update package as workflow artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: SaveVido-${{ github.run_number }}-Windows
+          path: |
+            release/SaveVido-Setup.exe
+            release/SaveVido-Update-Manifest.json
+            release/SaveVido-Update.zip
+          if-no-files-found: error
+          retention-days: 14
+
       - name: Publish versioned GitHub Release and refresh website manifest
         shell: pwsh
         env:
-          GH_TOKEN: ${{ secrets.SAVEVIDO_RELEASE_TOKEN || github.token }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           # Prefer a repository owner-created token when configured. The default
           # # GITHUB_TOKEN is permitted only if repository/org Actions settings allow
