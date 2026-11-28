@@ -7,6 +7,34 @@ function downloadFeedback(x){const blob=new Blob([JSON.stringify(x,null,2)],{typ
 async function copyFeedbackUrl(value){try{await navigator.clipboard.writeText(value);$("status").textContent="URL copied to clipboard.";}catch(_){$("status").textContent="Could not copy URL. Open it and copy manually.";}}
 async function deleteFeedback(id){if(!confirm("Delete this feedback permanently?"))return;const r=await fetch(api+"?feedback_id="+encodeURIComponent(id),{method:"DELETE",headers:{Authorization:"Bearer "+token}});const d=await r.json();if(!r.ok||!d.ok)throw new Error(d.error||"Delete failed");load();}
 function link(url,label){return url?'<a class="map" target="_blank" rel="noopener noreferrer" href="'+esc(url)+'">'+esc(label)+'</a>':"—";}
+function renderDownloadEvents(events){
+ if(!events||!events.length)return '<span class="muted">No download activity shared.</span>';
+ return '<details><summary>'+events.length+' recent events</summary><div style="min-width:240px;max-width:560px">'+events.map(function(e){
+  const kind=esc(String(e.event_type||"").replaceAll("_"," ")),date=esc(time(e.created_at));
+  const url=e.source_url?link(e.source_url,"Open source URL"):esc(e.source_host||"Source not shared");
+  const err=e.error_message?'<div style="white-space:pre-wrap;color:#ffb4a9">'+esc(e.error_code||"Error")+': '+esc(e.error_message)+'</div>':"";
+  return '<div style="padding:8px 0;border-bottom:1px solid var(--line)"><small>'+date+'</small><br><strong>'+kind+'</strong> · '+url+err+'</div>';
+ }).join("")+'</div></details>';
+}
+function renderRegisteredUsers(users){
+ $("registered-users").innerHTML=(users||[]).map(function(u){
+  const active=u.active_now?'<strong style="color:var(--lime)">Active now</strong>':'<span class="muted">Inactive</span>';
+  const email=u.email?'<a class="map" href="mailto:'+esc(u.email)+'">'+esc(u.email)+'</a>':"—";
+  const phone=u.whatsapp_number?'<a class="map" target="_blank" rel="noopener noreferrer" href="https://wa.me/'+esc(u.whatsapp_number.replace(/[^0-9]/g,""))+'">'+esc(u.whatsapp_number)+'</a>':"—";
+  const permissions=[u.allow_email?"Email allowed":"Email not allowed",u.allow_whatsapp?"WhatsApp allowed":"WhatsApp not allowed"].map(esc).join("<br>");
+  const coords=u.location_latitude!==null&&u.location_longitude!==null&&Number.isFinite(Number(u.location_latitude))&&Number.isFinite(Number(u.location_longitude));
+  const map=coords?link("https://www.google.com/maps?q="+encodeURIComponent(u.location_latitude+","+u.location_longitude),"Open shared location"):"Not shared";
+  return '<tr><td>'+active+'<br><small>'+esc(time(u.last_seen_at))+'</small></td><td>'+esc(u.nickname)+'</td><td>'+email+'</td><td>'+phone+'</td><td>'+permissions+'</td><td>'+map+'</td><td>'+Number(u.today_success_downloads||0).toLocaleString()+'</td><td>'+renderDownloadEvents(u.download_events)+'</td></tr>';
+ }).join("")||'<tr><td colspan="8">No registered submissions yet</td></tr>';
+}
+function renderUnregisteredUsers(users){
+ $("unregistered-users").innerHTML=(users||[]).map(function(u){
+  const active=u.active_now?'<strong style="color:var(--lime)">Active now</strong>':'<span class="muted">Inactive</span>';
+  const location=[u.city,u.country_code].filter(Boolean).join(", ");
+  const map=location?link("https://www.google.com/maps/search/?api=1&query="+encodeURIComponent(location),"Open approximate map"):"Not available";
+  return '<tr><td>'+active+'<br><small>'+esc(time(u.last_seen_at))+'</small></td><td>Anonymous · '+esc(u.session_label)+'</td><td>'+map+'</td><td>'+Number(u.today_success_downloads||0).toLocaleString()+'</td><td>'+renderDownloadEvents(u.download_events)+'</td></tr>';
+ }).join("")||'<tr><td colspan="5">No anonymous sessions yet</td></tr>';
+}
 async function load(){
  $("status").textContent="Loading private analytics…";
  try{
@@ -14,6 +42,8 @@ async function load(){
   if(r.status===401)throw new Error("Your access token was not accepted.");
   if(!r.ok)throw new Error("Analytics service returned "+r.status);
   const d=await r.json(),t=d.totals||{},feedbacks=d.feedbacks||[];
+  renderRegisteredUsers(d.registered_users||[]);
+  renderUnregisteredUsers(d.unregistered_users||[]);
   $("downloads").textContent=Number(t.downloads||0).toLocaleString();
   $("views").textContent=Number(t.page_views||0).toLocaleString();
   $("visitors").textContent=Number(t.visitors||0).toLocaleString();
