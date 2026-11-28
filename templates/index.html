@@ -157,7 +157,7 @@
   <!-- Styles -->
   <link
     rel="stylesheet"
-    href="{{ url_for('static', filename='style.css') }}?v=20261128-registration-1"
+    href="{{ url_for('static', filename='style.css') }}?v=20261128-registration-2"
   >
 
   <!-- Structured Data -->
@@ -1438,7 +1438,7 @@
           <label class="registration-check"><input id="registrationEmailUpdates" type="checkbox"> Send me email messages</label>
           <label class="registration-check"><input id="registrationWhatsappUpdates" type="checkbox"> Send me WhatsApp messages</label>
         </fieldset>
-        <label class="registration-check registration-consent"><input id="registrationShareActivity" type="checkbox"> Share download success, errors/incomplete status and source URLs with our private dashboard for troubleshooting. Optional.</label>
+        <label class="registration-check registration-consent"><input id="registrationShareActivity" type="checkbox"> Share download success, errors/incomplete status, source URLs and recent app activity with our private dashboard to show active users. Optional.</label>
         <label class="registration-check registration-consent"><input id="registrationShareLocation" type="checkbox"> Allow one-time device location access and share it with the private dashboard. Optional; never in the background.</label>
         <p class="registration-note">Contact details and preferences are saved if you submit. Download activity/source URLs are saved only if you select that option. Location is requested once only if selected. This form does not create a login account.</p>
         <div class="registration-actions"><button type="submit" class="solid-btn" id="registrationSubmitBtn">Submit details</button> <button type="button" id="registrationSkipBtn">Skip for now</button></div>
@@ -1465,7 +1465,7 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261128-registration-1"
+    src="{{ url_for('static', filename='script.js') }}?v=20261128-registration-2"
   ></script>
   <script src="{{ url_for('static', filename='update.js') }}?v=1" defer></script>
 
