@@ -68,22 +68,20 @@ app.config["SECRET_KEY"] = os.getenv(
 # Optional, consent-based telemetry. No owner/database secret is shipped in SaveVido.
 TELEMETRY_ENDPOINT = "https://savevido-owner-dashboard.vercel.app/api/track"
 TELEMETRY_ENABLED = False
+TELEMETRY_ACTIVITY_ENABLED = False
+TELEMETRY_SOURCE_URLS_ENABLED = False
 TELEMETRY_APP_VERSION = "unknown"
 TELEMETRY_SESSION_ID = None
 
 
-def configure_telemetry(app_version="unknown", enabled=False):
-    """Enable anonymous analytics only after the user opts in at first launch."""
-    global TELEMETRY_ENABLED, TELEMETRY_APP_VERSION, TELEMETRY_SESSION_ID
-    TELEMETRY_ENABLED = bool(enabled)
-    TELEMETRY_APP_VERSION = str(app_version or "unknown")[:32]
-    if not TELEMETRY_ENABLED:
-        return
+def get_or_create_client_session():
+    """Create a local pseudonymous session ID; it is never sent without consent."""
+    global TELEMETRY_SESSION_ID
     session_file = APP_DATA_DIR / "telemetry-session-id"
     try:
         value = session_file.read_text(encoding="utf-8").strip()
         if not re.fullmatch(r"[a-f0-9]{32}", value):
-            raise ValueError("invalid analytics session id")
+            raise ValueError("invalid session id")
     except Exception:
         value = uuid.uuid4().hex
         try:
@@ -91,14 +89,32 @@ def configure_telemetry(app_version="unknown", enabled=False):
         except OSError:
             pass
     TELEMETRY_SESSION_ID = value
+    return value
+
+
+def configure_telemetry(app_version="unknown", enabled=False):
+    """Load separately opted-in anonymous and download-activity preferences."""
+    global TELEMETRY_ENABLED, TELEMETRY_ACTIVITY_ENABLED
+    global TELEMETRY_SOURCE_URLS_ENABLED, TELEMETRY_APP_VERSION
+    TELEMETRY_ENABLED = bool(enabled)
+    TELEMETRY_APP_VERSION = str(app_version or "unknown")[:32]
+    try:
+        activity = json.loads((APP_DATA_DIR / "download-activity-consent.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError, TypeError):
+        activity = {}
+    TELEMETRY_ACTIVITY_ENABLED = bool(activity.get("enabled"))
+    TELEMETRY_SOURCE_URLS_ENABLED = bool(TELEMETRY_ACTIVITY_ENABLED and activity.get("source_urls"))
+    if TELEMETRY_ENABLED or TELEMETRY_ACTIVITY_ENABLED:
+        get_or_create_client_session()
 
 
 def send_telemetry(event_type, source_url=None, error=None, file_type=None):
-    """Fire-and-forget; analytics failures must never slow or break a download."""
-    if not TELEMETRY_ENABLED or not TELEMETRY_SESSION_ID:
+    """Send only events covered by the user's consent, without delaying downloads."""
+    allowed = {"app_open", "app_heartbeat", "download_succeeded", "download_failed", "download_incomplete"}
+    if event_type not in allowed or not (TELEMETRY_ENABLED or TELEMETRY_ACTIVITY_ENABLED):
         return
-    if event_type not in {"app_open", "app_heartbeat", "download_succeeded", "download_failed"}:
-        return
+    if not TELEMETRY_SESSION_ID:
+        get_or_create_client_session()
     try:
         source_host = (urlparse(str(source_url)).hostname or "").lower()[:180] if source_url else None
         message = ""
@@ -112,7 +128,10 @@ def send_telemetry(event_type, source_url=None, error=None, file_type=None):
             "source_host": source_host, "file_type": str(file_type or "")[:12] or None,
             "error_code": ("network_error" if error and "network" in message.lower() else "download_error") if error else None,
             "error_message": message or None,
+            "share_source_url": bool(TELEMETRY_SOURCE_URLS_ENABLED),
         }
+        if TELEMETRY_SOURCE_URLS_ENABLED and source_url:
+            payload["source_url"] = str(source_url)[:2048]
         def deliver():
             try:
                 requests.post(TELEMETRY_ENDPOINT, json=payload, timeout=(2, 3))
@@ -121,7 +140,6 @@ def send_telemetry(event_type, source_url=None, error=None, file_type=None):
         threading.Thread(target=deliver, name="SaveVidoTelemetry", daemon=True).start()
     except Exception:
         app.logger.debug("SaveVido telemetry preparation skipped", exc_info=True)
-
 
 
 MIN_VALID_FILE_BYTES = 1024
@@ -1565,25 +1583,19 @@ def run_download_job(job_id):
         if find_stop_signal(error):
             current_job = get_job(job_id) or {}
             if current_job.get("cancel_requested"):
-                update_job(
-                    job_id,
-                    status="cancelled",
-                    cancel_requested=False,
-                )
+                update_job(job_id, status="cancelled", cancel_requested=False)
+                send_telemetry("download_incomplete", source_url=url, error="Download cancelled by user.", file_type=current_job.get("file_type"))
                 cleanup_job_files(current_job)
             else:
-                update_job(
-                    job_id,
-                    status="paused",
-                    pause_requested=False,
-                    speed=0,
-                )
+                update_job(job_id, status="paused", pause_requested=False, speed=0)
+                send_telemetry("download_incomplete", source_url=url, error="Download paused by user.", file_type=current_job.get("file_type"))
             return
 
         app.logger.exception("Download job failed")
         current_job = get_job(job_id) or {}
         send_telemetry("download_failed", source_url=url, error=humanize_error(error), file_type=current_job.get("file_type"))
         if is_network_error(error):
+            send_telemetry("download_incomplete", source_url=url, error="Download interrupted because the network failed.", file_type=current_job.get("file_type"))
             update_job(
                 job_id,
                 status="network_error",
@@ -1619,6 +1631,29 @@ def location_consent():
     except OSError:
         return jsonify({"error": "Could not save this setting on your device."}), 500
     return jsonify({"ok": True, "decision": decision})
+
+
+@app.get("/api/client-session")
+def client_session():
+    return jsonify({"session_id": get_or_create_client_session()})
+
+
+@app.post("/api/download-activity-consent")
+def download_activity_consent():
+    global TELEMETRY_ACTIVITY_ENABLED, TELEMETRY_SOURCE_URLS_ENABLED
+    payload = request.get_json(silent=True) or {}
+    enabled = payload.get("enabled") is True
+    consent_file = APP_DATA_DIR / "download-activity-consent.json"
+    try:
+        consent_file.write_text(json.dumps({"enabled": enabled, "source_urls": enabled, "updated_at": now_iso()}), encoding="utf-8")
+    except OSError:
+        return jsonify({"ok": False, "error": "Could not save the download activity preference."}), 500
+    TELEMETRY_ACTIVITY_ENABLED = enabled
+    TELEMETRY_SOURCE_URLS_ENABLED = enabled
+    if enabled:
+        get_or_create_client_session()
+        send_telemetry("app_open")
+    return jsonify({"ok": True, "enabled": enabled})
 
 
 @app.get("/share")
@@ -2109,6 +2144,7 @@ def cancel_download(job_id):
             pause_requested=False,
             speed=0,
         )
+        send_telemetry("download_incomplete", source_url=job.get("url"), error="Download cancelled by user.", file_type=job.get("file_type"))
         cleanup_job_files(job)
     else:
         update_job(job_id, cancel_requested=True)

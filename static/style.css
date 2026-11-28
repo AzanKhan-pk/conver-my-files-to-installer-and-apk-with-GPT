@@ -1014,3 +1014,23 @@ html.savevido-desktop #checkUpdatesBtn { color:var(--lime); }
 .download-progress-panel [hidden] {
   display: none !important;
 }
+
+
+/* First-launch contact registration; only shown in the local desktop app. */
+#registrationPrompt{position:fixed;inset:0;z-index:10020;display:flex;align-items:center;justify-content:center;padding:18px;background:rgba(5,7,12,.82);backdrop-filter:blur(12px)}
+#registrationPrompt[hidden]{display:none}
+.registration-card{width:min(620px,100%);max-height:90vh;overflow:auto;padding:26px;border:1px solid var(--line,#2b3042);border-radius:22px;background:var(--panel,#11131d);color:var(--text,#f4f5fb);box-shadow:0 24px 90px rgba(0,0,0,.45)}
+.registration-card h2{margin:8px 0 12px;font-size:clamp(24px,5vw,34px)}
+.registration-intro,.registration-note{color:var(--muted,#9da4b8);font-size:13px;line-height:1.6}
+.registration-card>form>label:not(.registration-check){display:block;margin:14px 0 7px;font-size:12px;font-weight:800;letter-spacing:.07em}
+.registration-card input:not([type=checkbox]){display:block;width:100%;margin-top:7px;padding:12px 14px;border:1px solid var(--line,#2b3042);border-radius:10px;background:#080a10;color:inherit}
+.registration-card fieldset{margin:15px 0;padding:13px;border:1px solid var(--line,#2b3042);border-radius:12px}
+.registration-card legend{padding:0 5px;font-size:13px;font-weight:700}
+.registration-check{display:flex;align-items:flex-start;gap:9px;margin:11px 0;font-size:13px;line-height:1.5}
+.registration-check input{flex:0 0 auto;margin-top:3px;accent-color:#a6e63f}
+.registration-consent{padding:10px 12px;border-radius:10px;background:rgba(255,255,255,.035)}
+.registration-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px}
+.registration-actions button,#registrationConfirm button{padding:11px 15px;border-radius:10px}
+#registrationStatus{min-height:22px;margin-top:14px;font-size:13px}
+body.registration-open{overflow:hidden}
+@media(max-width:480px){.registration-card{padding:19px;border-radius:16px}}

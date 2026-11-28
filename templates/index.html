@@ -157,7 +157,7 @@
   <!-- Styles -->
   <link
     rel="stylesheet"
-    href="{{ url_for('static', filename='style.css') }}?v=20261126-lazy-cookie-2"
+    href="{{ url_for('static', filename='style.css') }}?v=20261128-registration-1"
   >
 
   <!-- Structured Data -->
@@ -1424,6 +1424,28 @@
 
 
 
+  <section id="registrationPrompt" role="dialog" aria-modal="true" aria-labelledby="registrationTitle" hidden>
+    <div class="registration-card">
+      <p class="eyebrow">CONTACT DETAILS · OPTIONAL</p><h2 id="registrationTitle">Enter your details</h2>
+      <p class="registration-intro">This is not proper account creation. Submitting saves your contact details in SaveVido's private database so we can send messages you allow. You can skip it.</p>
+      <div id="registrationConfirm" hidden><p>Are these details still correct?</p><button id="registrationConfirmBtn" type="button" class="solid-btn">Yes, details are correct</button> <button id="registrationEditBtn" type="button">Update details</button></div>
+      <form id="registrationForm">
+        <label for="registrationName">YOUR NAME</label><input id="registrationName" autocomplete="name" maxlength="80" placeholder="Enter your name">
+        <label for="registrationEmail">EMAIL</label><input id="registrationEmail" type="email" autocomplete="email" maxlength="254" placeholder="Email address (optional)">
+        <label for="registrationWhatsapp">WHATSAPP NUMBER</label><input id="registrationWhatsapp" type="tel" autocomplete="tel" maxlength="24" placeholder="+923001234567">
+        <p class="registration-note">At least one contact method (email or WhatsApp) is required to submit.</p>
+        <fieldset><legend>Allow us to send you a message about an error or update</legend>
+          <label class="registration-check"><input id="registrationEmailUpdates" type="checkbox"> Send me email messages</label>
+          <label class="registration-check"><input id="registrationWhatsappUpdates" type="checkbox"> Send me WhatsApp messages</label>
+        </fieldset>
+        <label class="registration-check registration-consent"><input id="registrationShareActivity" type="checkbox"> Share download success, errors/incomplete status and source URLs with our private dashboard for troubleshooting. Optional.</label>
+        <label class="registration-check registration-consent"><input id="registrationShareLocation" type="checkbox"> Allow one-time device location access and share it with the private dashboard. Optional; never in the background.</label>
+        <p class="registration-note">Contact details and preferences are saved if you submit. Download activity/source URLs are saved only if you select that option. Location is requested once only if selected. This form does not create a login account.</p>
+        <div class="registration-actions"><button type="submit" class="solid-btn" id="registrationSubmitBtn">Submit details</button> <button type="button" id="registrationSkipBtn">Skip for now</button></div>
+      </form><p id="registrationStatus" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
   <section id="locationConsentPrompt" role="dialog" aria-modal="true" aria-labelledby="locationConsentTitle" hidden><div class="location-consent-card"><p class="eyebrow">OPTIONAL · ONE TIME</p><h2 id="locationConsentTitle">Allow your location?</h2><p>Sharing your approximate current location can help troubleshoot a problem. It is optional and is attached only if you later submit feedback.</p><button id="locationAllowBtn" type="button" class="solid-btn">Allow</button> <button id="locationDenyBtn" type="button">Deny</button> <button id="locationTurnOnBtn" type="button" hidden>Turn on location</button><p id="locationConsentStatus" role="status"></p></div></section>
 
   <!-- MAIN JAVASCRIPT -->
@@ -1443,7 +1465,7 @@
   <div id="historyBackdrop" class="history-backdrop" hidden></div>
 
   <script
-    src="{{ url_for('static', filename='script.js') }}?v=20261126-auto-cookie-1"
+    src="{{ url_for('static', filename='script.js') }}?v=20261128-registration-1"
   ></script>
   <script src="{{ url_for('static', filename='update.js') }}?v=1" defer></script>
 

@@ -383,7 +383,7 @@ def main():
     if consent is None:
         choice = QMessageBox.question(
             None, "SaveVido privacy choice",
-            "Would you like to share anonymous app-open and download success/failure events, app version, file type and source website hostname to help improve SaveVido? The service may estimate country/city from network metadata. It does not receive your raw IP, full media URL, file name or downloaded file. Choose No to disable analytics.",
+            "Would you like to share anonymous app-open and download success/failure events, app version, file type and source website hostname to help improve SaveVido? The service may estimate country/city from network metadata. This choice does not share full media URLs. You can separately opt in to download activity and source URL sharing in SaveVido's contact form. Choose No to disable anonymous analytics.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
             QMessageBox.StandardButton.No,
         )
@@ -419,7 +419,7 @@ def main():
     else:
         QMessageBox.warning(window, "SaveVido", "The system tray is unavailable. SaveVido will remain open in its app window.")
     window.show()
-    if savevido_app.TELEMETRY_ENABLED:
+    if savevido_app.TELEMETRY_ENABLED or savevido_app.TELEMETRY_ACTIVITY_ENABLED:
         heartbeat = QTimer(qt_app)
         heartbeat.setInterval(5 * 60 * 1000)
         heartbeat.timeout.connect(lambda: savevido_app.send_telemetry("app_heartbeat"))

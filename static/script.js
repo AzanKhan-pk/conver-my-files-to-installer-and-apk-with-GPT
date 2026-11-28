@@ -719,6 +719,12 @@ function openFeedbackForm(errorMessage = "", sourceUrl = "") {
   ];
   const comment = $("#comment");
   if (comment) comment.value = lines.join("\n");
+  const savedRegistration = getSavedRegistration();
+  if (savedRegistration) {
+    if ($("#name")) $("#name").value = savedRegistration.name || "";
+    if ($("#feedbackEmail")) $("#feedbackEmail").value = savedRegistration.email || "";
+    if ($("#feedbackWhatsapp")) $("#feedbackWhatsapp").value = savedRegistration.whatsapp || "";
+  }
   feedbackForm?.scrollIntoView({ behavior: "smooth", block: "center" });
   comment?.focus();
   if (feedbackStatus) {
@@ -744,8 +750,25 @@ function showErrorWithFeedback(error, sourceUrl = "") {
 }
 
 supportFeedbackButton?.addEventListener("click", () => openFeedbackForm());
+const registrationEndpoint = "https://savevido-owner-dashboard.vercel.app/api/register";
+const REGISTRATION_STORAGE_KEY = "savevido_registration_v1";
+const registrationPrompt = $("#registrationPrompt"), registrationForm = $("#registrationForm"), registrationConfirm = $("#registrationConfirm"), registrationStatus = $("#registrationStatus"), registrationLocationCheck = $("#registrationShareLocation");
+let registrationLocation = null;
+function getSavedRegistration(){try{const v=JSON.parse(localStorage.getItem(REGISTRATION_STORAGE_KEY)||"null");return v&&typeof v==="object"?v:null;}catch(_){return null;}}
+function setRegistrationStatus(message,error=false){if(!registrationStatus)return;registrationStatus.textContent=message||"";registrationStatus.className=error?"status error":"status";}
+function closeRegistrationPrompt(){if(registrationPrompt)registrationPrompt.hidden=true;document.body.classList.remove("registration-open");}
+function showRegistrationPrompt(edit=false){if(!registrationPrompt)return;registrationPrompt.hidden=false;document.body.classList.add("registration-open");if(registrationConfirm)registrationConfirm.hidden=edit;if(registrationForm)registrationForm.hidden=!edit;if(edit){const s=getSavedRegistration()||{};$("#registrationName").value=s.name||"";$("#registrationEmail").value=s.email||"";$("#registrationWhatsapp").value=s.whatsapp||"";$("#registrationEmailUpdates").checked=!!s.allowEmail;$("#registrationWhatsappUpdates").checked=!!s.allowWhatsapp;$("#registrationShareActivity").checked=!!s.shareActivity;$("#registrationShareLocation").checked=false;registrationLocation=null;}setRegistrationStatus("");}
+async function initializeRegistrationPrompt(){if(!new URLSearchParams(window.location.search).has("desktop"))return;const s=getSavedRegistration(),due=!s||!s.submittedAt||Date.now()-Number(s.submittedAt)>=7*24*60*60*1000;if(!due)return;if(s){showRegistrationPrompt(false);registrationConfirm.hidden=false;registrationForm.hidden=true;}else showRegistrationPrompt(true);}
+$("#registrationSkipBtn")?.addEventListener("click",closeRegistrationPrompt);
+$("#registrationEditBtn")?.addEventListener("click",()=>showRegistrationPrompt(true));
+$("#registrationConfirmBtn")?.addEventListener("click",async()=>{const s=getSavedRegistration();if(!s)return showRegistrationPrompt(true);await submitRegistrationData(s,false,true);});
+registrationLocationCheck?.addEventListener("change",()=>{registrationLocation=null;if(!registrationLocationCheck.checked){setRegistrationStatus("Location will not be shared.");return;}if(!navigator.geolocation){registrationLocationCheck.checked=false;setRegistrationStatus("Location is unavailable. You can submit without it.",true);return;}setRegistrationStatus("Requesting location once…");navigator.geolocation.getCurrentPosition(pos=>{registrationLocation={latitude:pos.coords.latitude,longitude:pos.coords.longitude,location_accuracy_m:pos.coords.accuracy};setRegistrationStatus("Location received. It will be shared only if you submit.");},()=>{registrationLocationCheck.checked=false;registrationLocation=null;setRegistrationStatus("Location permission was not granted or is unavailable. You can submit without location.",true);},{enableHighAccuracy:false,timeout:12000,maximumAge:0});});
+async function submitRegistrationData(data,updateLocation=true,confirmOnly=false){const button=$("#registrationSubmitBtn");if(button)button.disabled=true;setRegistrationStatus(confirmOnly?"Confirming your details…":"Submitting your details securely…");try{const sr=await fetch("/api/client-session",{cache:"no-store"}),sd=await sr.json();if(!sr.ok||!sd.session_id)throw new Error("Could not create a local session. Please try again.");const body={session_id:sd.session_id,nickname:data.name,email:data.email,whatsapp_number:data.whatsapp,allow_email:!!data.allowEmail,allow_whatsapp:!!data.allowWhatsapp,share_activity:!!data.shareActivity,update_location:!!updateLocation,location_consent:!!(updateLocation&&registrationLocationCheck?.checked&&registrationLocation),...(updateLocation&&registrationLocationCheck?.checked&&registrationLocation?registrationLocation:{})};const response=await fetch(registrationEndpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)}),result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||"Could not save your details.");const cr=await fetch("/api/download-activity-consent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled:!!data.shareActivity})}),cd=await cr.json();if(!cr.ok||!cd.ok)throw new Error("Details saved, but the activity preference could not be applied. Please submit again.");localStorage.setItem(REGISTRATION_STORAGE_KEY,JSON.stringify({...data,submittedAt:Date.now(),locationShared:!!body.location_consent}));closeRegistrationPrompt();}catch(e){setRegistrationStatus(e.message||"Could not submit your details.",true);}finally{if(button)button.disabled=false;}}
+registrationForm?.addEventListener("submit",async event=>{event.preventDefault();const d={name:$("#registrationName").value.trim(),email:$("#registrationEmail").value.trim(),whatsapp:$("#registrationWhatsapp").value.trim(),allowEmail:$("#registrationEmailUpdates").checked,allowWhatsapp:$("#registrationWhatsappUpdates").checked,shareActivity:$("#registrationShareActivity").checked};if(d.name.length<2||(!d.email&&!d.whatsapp)){setRegistrationStatus("Enter your name and at least one contact method.",true);return;}if(d.allowEmail&&!d.email){setRegistrationStatus("Enter an email address to allow email messages.",true);return;}if(d.allowWhatsapp&&!d.whatsapp){setRegistrationStatus("Enter a WhatsApp number to allow WhatsApp messages.",true);return;}if(d.email&&!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(d.email)){setRegistrationStatus("Enter a valid email address.",true);return;}if(d.whatsapp&&!/^\+[1-9][0-9]{7,14}$/.test(d.whatsapp)){setRegistrationStatus("Use WhatsApp international format, e.g. +923001234567.",true);return;}await submitRegistrationData(d,true,false);});
+initializeRegistrationPrompt();
 async function requestLocationOnce() {
-  if (!new URLSearchParams(window.location.search).has("desktop")) return;
+  // The registration form owns optional location permission in the desktop app.
+  if (!new URLSearchParams(window.location.search).has("desktop") || $("#registrationPrompt")) return;
   const prompt = $("#locationConsentPrompt");
   if (!prompt) return;
 
